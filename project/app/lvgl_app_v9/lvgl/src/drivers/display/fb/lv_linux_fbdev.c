@@ -213,12 +213,12 @@ void lv_linux_fbdev_set_file(lv_display_t * disp, const char * file)
     int32_t hor_res = dsc->vinfo.xres;
     int32_t ver_res = dsc->vinfo.yres;
     int32_t width = dsc->vinfo.width;
-    uint32_t draw_buf_size = hor_res * (dsc->vinfo.bits_per_pixel >> 3);
+    uint32_t draw_buf_size;
     if(LV_LINUX_FBDEV_RENDER_MODE == LV_DISPLAY_RENDER_MODE_PARTIAL) {
-        draw_buf_size *= LV_LINUX_FBDEV_BUFFER_SIZE;
+        draw_buf_size = LV_LINUX_FBDEV_BUFFER_SIZE;
     }
     else {
-        draw_buf_size *= ver_res;
+        draw_buf_size = hor_res * ver_res * (dsc->vinfo.bits_per_pixel >> 3);
     }
 
     uint8_t * draw_buf = NULL;
