@@ -2289,6 +2289,10 @@ function build_firmware(){
 	[ "$RK_ENABLE_RECOVERY" = "y" -o "$RK_ENABLE_OTA" = "y" ] && build_ota
 	build_updateimg
 
+	if [ "$RK_BOOT_MEDIUM" = "sd_card" ]; then
+		$SDK_ROOT_DIR/tools/linux/blkenvflash $RK_PROJECT_OUTPUT_IMAGE
+	fi
+
 	finish_build
 }
 
