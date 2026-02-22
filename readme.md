@@ -1,3 +1,9 @@
+# NOTE:
+https://doc.embedfire.com/linux/rv110x/quick_start/zh/latest/doc/image/cfg/cfg.html
+https://doc.embedfire.com/products/link/zh/latest/linux/ebf_lubancat_rk_rv.html
+https://github.com/LubanCat/RV06_03_Linux_SDK
+https://github.com/LuckfoxTECH/luckfox-pico
+
 # LubanCat RV06_03 SDK
 
 * This SDK is modified based on the SDK provided by Rockchip
