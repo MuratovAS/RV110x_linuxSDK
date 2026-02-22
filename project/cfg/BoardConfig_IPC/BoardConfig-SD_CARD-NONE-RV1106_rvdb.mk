@@ -58,8 +58,4 @@ export RK_PARTITION_CMD_IN_ENV="32K(env),512K@32K(idblock),256K(uboot),32M(boot)
 export RK_PARTITION_FS_TYPE_CFG=rootfs@IGNORE@ext4
 
 # enable install app to oem partition
-export RK_BUILD_APP_TO_OEM_PARTITION=n
-
-# enable rockchip wifi
-export RK_ENABLE_WIFI=y
-export RK_ENABLE_WIFI_CHIP=AIC8800DC
+export RK_BUILD_APP_TO_OEM_PARTITION=y
