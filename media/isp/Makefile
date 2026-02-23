@@ -118,9 +118,7 @@ endif
 all: $(PKG_TARGET)
 	@rm -fr $(CURRENT_DIR)/$(PKG_BIN)/etc $(CURRENT_DIR)/$(PKG_BIN)/usr;
 	@rm -fr $(CURRENT_DIR)/$(PKG_BIN)/rkisp_demo;
-ifneq ($(CONFIG_RK_ISP_INSTALL_IQFILES),y)
-	@rm -fr $(CURRENT_DIR)/$(PKG_BIN)/isp_iqfiles;
-endif
+
 ifneq ($(RK_MEDIA_OUTPUT),)
 	$(call MAROC_COPY_PKG_TO_MEDIA_OUTPUT, $(RK_MEDIA_OUTPUT), $(PKG_BIN))
 endif

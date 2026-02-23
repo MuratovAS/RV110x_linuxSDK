@@ -1,8 +1,11 @@
 # NOTE:
-https://doc.embedfire.com/linux/rv110x/quick_start/zh/latest/doc/image/cfg/cfg.html
-https://doc.embedfire.com/products/link/zh/latest/linux/ebf_lubancat_rk_rv.html
 https://github.com/LubanCat/RV06_03_Linux_SDK
 https://github.com/LuckfoxTECH/luckfox-pico
+https://github.com/jetkvm/rv1106-system
+
+https://doc.embedfire.com/linux/rv110x/quick_start/zh/latest/doc/image/cfg/cfg.html
+https://doc.embedfire.com/products/link/zh/latest/linux/ebf_lubancat_rk_rv.html
+https://deepwiki.com/jetkvm/rv1106-system/3-media-framework
 
 # LubanCat RV06_03 SDK
 

@@ -1,16 +1,16 @@
 
 # Enable build eudev
-CONFIG_SYSDRV_ENABLE_EUDEV=y
+CONFIG_SYSDRV_ENABLE_EUDEV=n
 $(eval $(call MACRO_CHECK_ENABLE_PKG, RK_ENABLE_EUDEV))
 
 
 # Enable build adbd debug tool
-CONFIG_SYSDRV_ENABLE_ADBD=y
+CONFIG_SYSDRV_ENABLE_ADBD=n
 $(eval $(call MACRO_CHECK_ENABLE_PKG, RK_ENABLE_ADBD))
 
 
 # Enable build gdb and gdbserver debug tool
-CONFIG_SYSDRV_ENABLE_GDB=y
+CONFIG_SYSDRV_ENABLE_GDB=n
 $(eval $(call MACRO_CHECK_ENABLE_PKG, RK_ENABLE_GDB))
 
 

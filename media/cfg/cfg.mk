@@ -27,8 +27,6 @@ export CONFIG_RK_RKAIQ=n
 export CONFIG_RK_ISP_HW_VERSION_V32=n
 # ISP build demo
 export CONFIG_RK_ISP_BUILD_DEMO=n
-# Install ISP IQ files into final image (set n to exclude from rootfs)
-export CONFIG_RK_ISP_INSTALL_IQFILES=n
 
 #------------------------------------------------
 # Rockchip's RGA2 (Raster Graphic Acceleration)

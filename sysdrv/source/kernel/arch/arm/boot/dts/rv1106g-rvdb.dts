@@ -170,15 +170,15 @@
 			label = "work_led"; //my
 			linux,default-trigger = "activity";
 			default-state = "on";
-			gpios = <&gpio1 RK_PC4 GPIO_ACTIVE_HIGH>; //green
+			gpios = <&gpio1 RK_PC3 GPIO_ACTIVE_HIGH>; //orange
 		};
-
+		
 		/*sys_led: sys-led {
 			label = "sys_led"; 
 			linux,default-trigger = "heartbeat";
 			default-state = "on";
 			//gpios = <&gpio5 4 GPIO_ACTIVE_HIGH>;
-			gpios = <&gpio1 RK_PC3 GPIO_ACTIVE_HIGH>; //orange
+			gpios = <&gpio1 RK_PC4 GPIO_ACTIVE_HIGH>; //green
 		};*/
 
 		fephy_spd_led: fephy-spd-led {
