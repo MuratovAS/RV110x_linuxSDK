@@ -1,0 +1,71 @@
+#!/bin/sh
+#
+# usbip-autobind - automatically bind/unbind USB devices for usbip export
+#
+
+USBIP=/usr/sbin/usbip
+INTERVAL=2
+
+# Returns true if device is already bound to usbip-host
+is_bound() {
+    local driver
+    driver=$(readlink /sys/bus/usb/devices/$1/driver 2>/dev/null)
+    [ "${driver##*/}" = "usbip-host" ]
+}
+
+# Returns true if device is a USB hub (class 09)
+is_hub() {
+    local class
+    class=$(cat /sys/bus/usb/devices/$1/bDeviceClass 2>/dev/null)
+    [ "$class" = "09" ]
+}
+
+bind_device() {
+    $USBIP bind --busid=$1 2>/dev/null && \
+        logger -t usbip-autobind "bound $1"
+}
+
+unbind_device() {
+    $USBIP unbind --busid=$1 2>/dev/null && \
+        logger -t usbip-autobind "unbound $1"
+}
+
+# Bind all devices that are already connected at startup
+bind_all() {
+    for busid in $(ls /sys/bus/usb/devices/ 2>/dev/null); do
+        echo "$busid" | grep -qE '^[0-9]+-[0-9]+(\.[0-9]+)*$' || continue
+        is_hub "$busid" && continue
+        is_bound "$busid" && continue
+        bind_device "$busid"
+    done
+}
+
+bind_all
+
+PREV_DEVICES=""
+
+while true; do
+    CURR_DEVICES=""
+
+    for busid in $(ls /sys/bus/usb/devices/ 2>/dev/null); do
+        # Only real devices: 1-1, 1-1.2, etc. (skip root hubs and interfaces)
+        echo "$busid" | grep -qE '^[0-9]+-[0-9]+(\.[0-9]+)*$' || continue
+
+        is_hub "$busid" && continue
+
+        CURR_DEVICES="$CURR_DEVICES $busid"
+
+        is_bound "$busid" && continue
+
+        bind_device "$busid"
+    done
+
+    # Detect disconnected devices and unbind them
+    for busid in $PREV_DEVICES; do
+        echo "$CURR_DEVICES" | grep -qw "$busid" && continue
+        unbind_device "$busid"
+    done
+
+    PREV_DEVICES="$CURR_DEVICES"
+    sleep $INTERVAL
+done

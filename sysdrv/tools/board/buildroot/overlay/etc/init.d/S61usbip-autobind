@@ -1,0 +1,44 @@
+#!/bin/sh
+#
+# usbip-autobind    Auto-bind/unbind USB devices for usbip export.
+#
+
+DAEMON=/usr/sbin/usbip-autobind
+PIDFILE=/var/run/usbip-autobind.pid
+
+[ -f $DAEMON ] || exit 0
+
+start() {
+	printf "Starting usbip-autobind: "
+	start-stop-daemon -S -q -b -m -p $PIDFILE -x $DAEMON
+	echo "OK"
+}
+
+stop() {
+	printf "Stopping usbip-autobind: "
+	start-stop-daemon -K -q -p $PIDFILE
+	rm -f $PIDFILE
+	echo "OK"
+}
+
+restart() {
+	stop
+	start
+}
+
+case "$1" in
+  start)
+	start
+	;;
+  stop)
+	stop
+	;;
+  restart|reload)
+	restart
+	;;
+  *)
+	echo "Usage: $0 {start|stop|restart}"
+	exit 1
+esac
+
+exit $?
