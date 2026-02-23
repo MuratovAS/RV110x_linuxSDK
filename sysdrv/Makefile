@@ -573,6 +573,11 @@ buildroot: prepare
 
 	cp -v $(SYSDRV_DIR)/tools/board/buildroot/$(BUILDROOT_DEFCONFIG) $(BUILDROOT_DIR)/$(BUILDROOT_VER)/configs/
 	cp -v $(SYSDRV_DIR)/tools/board/buildroot/busybox.config $(BUILDROOT_DIR)/$(BUILDROOT_VER)/package/busybox/
+	grep -q "usbip/Config.in" $(BUILDROOT_DIR)/$(BUILDROOT_VER)/package/Config.in || ( \
+		mkdir -p $(BUILDROOT_DIR)/$(BUILDROOT_VER)/package/usbip && \
+		patch -d $(BUILDROOT_DIR)/$(BUILDROOT_VER) -p1 < \
+		$(SYSDRV_DIR)/tools/board/buildroot/patch/usbip/usbip.patch \
+	)
 
 	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) $(BUILDROOT_DEFCONFIG) -C $(BUILDROOT_DIR)/$(BUILDROOT_VER)
 	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) source -C $(BUILDROOT_DIR)/$(BUILDROOT_VER)

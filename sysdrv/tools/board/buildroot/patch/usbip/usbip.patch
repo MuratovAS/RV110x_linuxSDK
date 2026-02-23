@@ -1,0 +1,62 @@
+--- a/package/Config.in
++++ b/package/Config.in
+@@ -649,6 +649,7 @@
+ 	source "package/usb_modeswitch/Config.in"
+ 	source "package/usb_modeswitch_data/Config.in"
+ 	source "package/usbguard/Config.in"
++	source "package/usbip/Config.in"
+ 	source "package/usbmount/Config.in"
+ 	source "package/usbutils/Config.in"
+ 	source "package/w_scan/Config.in"
+--- /dev/null
++++ b/package/usbip/Config.in
+@@ -0,0 +1,20 @@
++config BR2_PACKAGE_USBIP
++	bool "usbip"
++	depends on BR2_PACKAGE_HAS_UDEV
++	help
++	  USB/IP is a system for sharing USB devices over an IP network.
++	  It virtualizes USB I/O so that USB devices can be shared remotely.
++
++	  This package provides the userspace tools:
++	    - usbip:  client to attach/detach remote USB devices
++	    - usbipd: server daemon to export local USB devices
++
++	  The kernel must have the following options enabled:
++	    CONFIG_USBIP_CORE
++	    CONFIG_USBIP_HOST   (for server/exporting side)
++	    CONFIG_USBIP_VHCI_HCD (for client/importing side)
++
++	  https://www.kernel.org/
++
++comment "usbip needs a udev provider (enable eudev /dev management)"
++	depends on !BR2_PACKAGE_HAS_UDEV
+--- /dev/null
++++ b/package/usbip/usbip.mk
+@@ -0,0 +1,26 @@
++################################################################################
++#
++# usbip - USB/IP userspace tools
++#
++# Built from the kernel source tree (tools/usb/usbip/).
++# Kernel must have CONFIG_USBIP_CORE, CONFIG_USBIP_HOST,
++# CONFIG_USBIP_VHCI_HCD enabled.
++#
++################################################################################
++
++USBIP_VERSION = 5.10
++USBIP_SITE = $(TOPDIR)/../../kernel/tools/usb/usbip
++USBIP_SITE_METHOD = local
++
++USBIP_DEPENDENCIES = udev
++
++USBIP_AUTORECONF = YES
++
++USBIP_LICENSE = GPL-2.0+
++USBIP_LICENSE_FILES = COPYING
++
++USBIP_CONF_OPTS = \
++	--without-tcp-wrappers \
++	--disable-static
++
++$(eval $(autotools-package))
