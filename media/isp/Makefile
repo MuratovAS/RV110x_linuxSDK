@@ -42,11 +42,12 @@ endif
 endif
 
 PKG_NAME_RK3A_SERVER := $(PKG_NAME)/rkaiq_3A_server
-PKG_TARGET += rkaiq_3a_server-build
-
 PKG_NAME_RKAIQ_TOOL_SERVER := $(PKG_NAME)/rkaiq_tool_server
+ifeq ($(CONFIG_RK_RKAIQ),y)
+PKG_TARGET += rkaiq_3a_server-build
 ifeq ($(CONFIG_RK_CHIP),rv1106)
 PKG_TARGET += rkaiq_tool_server-build
+endif
 endif
 
 RK_MEDIA_OPTS += -I${RK_MEDIA_OUTPUT}/include -I${RK_MEDIA_OUTPUT}/include/libdrm -L${RK_MEDIA_OUTPUT}/lib -L$(CURRENT_DIR)/$(PKG_BIN)/lib
@@ -118,6 +119,15 @@ endif
 all: $(PKG_TARGET)
 	@rm -fr $(CURRENT_DIR)/$(PKG_BIN)/etc $(CURRENT_DIR)/$(PKG_BIN)/usr;
 	@rm -fr $(CURRENT_DIR)/$(PKG_BIN)/rkisp_demo;
+ifneq ($(CONFIG_RK_ISP_BUILD_DEMO),y)
+	@rm -f $(CURRENT_DIR)/$(PKG_BIN)/bin/rkisp_demo;
+endif
+ifneq ($(CONFIG_RK_RKAIQ),y)
+	@rm -f $(CURRENT_DIR)/$(PKG_BIN)/bin/j2s4b_dev;
+	@rm -rf $(CURRENT_DIR)/$(PKG_BIN)/isp_iqfiles;
+	@rm -f $(CURRENT_DIR)/$(PKG_BIN)/lib/librkaiq.so \
+	       $(CURRENT_DIR)/$(PKG_BIN)/lib/librkaiq.a;
+endif
 
 ifneq ($(RK_MEDIA_OUTPUT),)
 	$(call MAROC_COPY_PKG_TO_MEDIA_OUTPUT, $(RK_MEDIA_OUTPUT), $(PKG_BIN))

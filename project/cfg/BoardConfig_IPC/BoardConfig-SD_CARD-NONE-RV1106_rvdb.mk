@@ -59,3 +59,6 @@ export RK_PARTITION_FS_TYPE_CFG=rootfs@IGNORE@ext4
 
 # enable install app to oem partition
 export RK_BUILD_APP_TO_OEM_PARTITION=n
+
+# Disable AIISP models (no ISP/camera)
+export RK_AIISP_MODEL=NONE

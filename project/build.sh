@@ -1216,18 +1216,20 @@ function __PACKAGE_RESOURCES()
 		fi
 	fi
 
-	mkdir -p  $_iqfiles_dir
-	if [ -n "$RK_CAMERA_SENSOR_IQFILES" ];then
-		IFS=" ";for item in `echo $RK_CAMERA_SENSOR_IQFILES`
-		do
-			if [ -f "$RK_PROJECT_PATH_MEDIA/isp_iqfiles/$item" ];then
-				cp -rfa $RK_PROJECT_PATH_MEDIA/isp_iqfiles/$item $_iqfiles_dir
+	if [ -d "$RK_PROJECT_PATH_MEDIA/isp_iqfiles" ];then
+		mkdir -p  $_iqfiles_dir
+		if [ -n "$RK_CAMERA_SENSOR_IQFILES" ];then
+			IFS=" ";for item in `echo $RK_CAMERA_SENSOR_IQFILES`
+			do
+				if [ -f "$RK_PROJECT_PATH_MEDIA/isp_iqfiles/$item" ];then
+					cp -rfa $RK_PROJECT_PATH_MEDIA/isp_iqfiles/$item $_iqfiles_dir
+				fi
+			done; IFS=
+		else
+			msg_warn "Not found RK_CAMERA_SENSOR_IQFILES on the `realpath $BOARD_CONFIG`, copy all default for emmc or nand"
+			if [ "$RK_BOOT_MEDIUM" != "spi_nor" ];then
+				cp -rfa $RK_PROJECT_PATH_MEDIA/isp_iqfiles/* $_iqfiles_dir
 			fi
-		done; IFS=
-	else
-		msg_warn "Not found RK_CAMERA_SENSOR_IQFILES on the `realpath $BOARD_CONFIG`, copy all default for emmc or nand"
-		if [ "$RK_BOOT_MEDIUM" != "spi_nor" ];then
-			cp -rfa $RK_PROJECT_PATH_MEDIA/isp_iqfiles/* $_iqfiles_dir
 		fi
 	fi
 
