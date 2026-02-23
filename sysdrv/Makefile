@@ -605,7 +605,7 @@ else
 
 	# cp $(SYSDRV_DIR)/tools/board/buildroot/wpa_supplicant.conf $(SYSDRV_DIR_OUT_ROOTFS)/etc/wpa_supplicant.conf
  
-	cp -a $(SYSDRV_DIR)/tools/board/buildroot/overlay/etc/* $(SYSDRV_DIR_OUT_ROOTFS)/etc/
+	cp -a $(SYSDRV_DIR)/tools/board/buildroot/overlay/. $(SYSDRV_DIR_OUT_ROOTFS)/
 
 endif
 
