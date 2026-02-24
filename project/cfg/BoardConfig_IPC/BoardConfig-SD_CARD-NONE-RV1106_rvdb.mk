@@ -62,3 +62,6 @@ export RK_BUILD_APP_TO_OEM_PARTITION=n
 
 # Disable AIISP models (no ISP/camera)
 export RK_AIISP_MODEL=NONE
+
+# Enable Go Hello World app
+export RK_ENABLE_GO_HELLO=y
