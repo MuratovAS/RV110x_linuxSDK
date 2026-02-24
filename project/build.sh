@@ -960,11 +960,8 @@ function build_ota(){
 		update_img="$RK_OTA_RESOURCE"
 	fi
 
-	[[ "$RK_ENABLE_RECOVERY" = "y" ]] && update_script="-C $OTA_SCRIPT_PATH RK_OTA_update.sh"
-
 	tar_cmd="tar -cvhf  $RK_PROJECT_OUTPUT_IMAGE/update_ota.tar \
-	             -C $RK_PROJECT_OUTPUT_IMAGE $update_img \
-	             $update_script"
+	             -C $RK_PROJECT_OUTPUT_IMAGE $update_img"
 	eval $tar_cmd
 
 	finish_build

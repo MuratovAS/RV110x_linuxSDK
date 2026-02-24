@@ -7,6 +7,20 @@ https://doc.embedfire.com/linux/rv110x/quick_start/zh/latest/doc/image/cfg/cfg.h
 https://doc.embedfire.com/products/link/zh/latest/linux/ebf_lubancat_rk_rv.html
 https://deepwiki.com/jetkvm/rv1106-system/3-media-framework
 
+https://forums.luckfox.com/viewtopic.php?t=1850
+```
+scp update_ota.tar root@192.168.20.135:/userdata/update_ota.tar
+rk_ota --misc=update --tar_path=/userdata/update_ota.tar --save_dir=/userdata/ --partition=all --reboot
+rk_ota --misc=other --reboot
+rk_ota --misc=now
+rk_ota --misc=display
+
+# U-Boot:
+android_ab_select slot mmc 1:misc
+setenv slot b
+
+boot
+```
 # LubanCat RV06_03 SDK
 
 * This SDK is modified based on the SDK provided by Rockchip

@@ -1,0 +1,21 @@
+#!/bin/sh
+#
+# ab-confirm    Mark current A/B slot as successfully booted.
+#
+
+case "$1" in
+  start)
+	RK_OTA=$(command -v rk_ota 2>/dev/null)
+	if [ -n "$RK_OTA" ]; then
+		printf "Confirming A/B boot slot: "
+		$RK_OTA --misc=now && echo "OK" || echo "FAILED"
+	fi
+	;;
+  stop|restart|reload)
+	;;
+  *)
+	echo "Usage: $0 {start|stop|restart}"
+	exit 1
+esac
+
+exit 0
