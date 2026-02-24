@@ -40,7 +40,7 @@ __chk_camera_sensor_height()
 
 __insmod rtc-pcf8563.ko
 
-__insmod rk_dvbm.ko
+#__insmod rk_dvbm.ko
 
 __insmod videobuf2-memops.ko
 __insmod videobuf2-common.ko
@@ -66,7 +66,7 @@ echo 1 > /sys/module/video_rkisp/parameters/clr_unready_dev
 
 __insmod rga3.ko
 
-__insmod mpp_vcodec.ko
+#__insmod mpp_vcodec.ko
 
 __insmod rknpu.ko
 __insmod snd-soc-rv1106.ko
@@ -75,7 +75,7 @@ __insmod motor.ko
 
 __chk_camera_sensor_height
 
-__insmod rockit.ko mcu_fw_path="./hpmcu_wrap.bin" mcu_fw_addr=0xff6fe000 isp_max_h=$sensor_height
+#__insmod rockit.ko mcu_fw_path="./hpmcu_wrap.bin" mcu_fw_addr=0xff6fe000 isp_max_h=$sensor_height
 
 __insmod rve.ko
 
