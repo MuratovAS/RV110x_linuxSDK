@@ -1,0 +1,68 @@
+--- a/package/Config.in
++++ b/package/Config.in
+@@ -2574,6 +2574,7 @@
+ 	source "package/stunnel/Config.in"
+ 	source "package/suricata/Config.in"
+ 	source "package/system-config-printer/Config.in"
++	source "package/tailscale/Config.in"
+ 	source "package/tcpdump/Config.in"
+ 	source "package/tcping/Config.in"
+ 	source "package/tcpreplay/Config.in"
+--- /dev/null
++++ b/package/tailscale/Config.in
+@@ -0,0 +1,17 @@
++config BR2_PACKAGE_TAILSCALE
++	bool "tailscale"
++	help
++	  Tailscale is a zero-config VPN for building secure networks
++	  based on WireGuard. It works transparently across NATs and
++	  firewalls without port forwarding.
++
++	  This package installs pre-built tailscale binaries:
++	    - tailscale:  client CLI tool
++	    - tailscaled: background daemon
++
++	  After boot run: tailscale up
++	  to authenticate and join your tailnet.
++
++	  Update TAILSCALE_VERSION in tailscale.mk to the desired release.
++
++	  https://tailscale.com/
+--- /dev/null
++++ b/package/tailscale/tailscale.mk
+@@ -0,0 +1,35 @@
++################################################################################
++#
++# tailscale - zero-config VPN using WireGuard
++#
++# Uses pre-built static binaries from https://pkgs.tailscale.com/stable/
++# Update TAILSCALE_VERSION to the latest stable release as needed.
++#
++################################################################################
++
++TAILSCALE_VERSION = 1.80.0
++
++ifeq ($(ARCH),arm)
++TAILSCALE_ARCH = arm
++else ifeq ($(ARCH),aarch64)
++TAILSCALE_ARCH = arm64
++else ifeq ($(ARCH),x86_64)
++TAILSCALE_ARCH = amd64
++else
++TAILSCALE_ARCH = $(ARCH)
++endif
++
++TAILSCALE_SOURCE = tailscale_$(TAILSCALE_VERSION)_$(TAILSCALE_ARCH).tgz
++TAILSCALE_SITE   = https://pkgs.tailscale.com/stable
++
++TAILSCALE_LICENSE = BSD-3-Clause
++TAILSCALE_LICENSE_FILES = LICENSE
++
++define TAILSCALE_INSTALL_TARGET_CMDS
++	$(INSTALL) -D -m 0755 $(@D)/tailscale \
++		$(TARGET_DIR)/usr/bin/tailscale
++	$(INSTALL) -D -m 0755 $(@D)/tailscaled \
++		$(TARGET_DIR)/usr/sbin/tailscaled
++endef
++
++$(eval $(generic-package))

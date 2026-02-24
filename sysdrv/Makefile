@@ -578,6 +578,11 @@ buildroot: prepare
 		patch -d $(BUILDROOT_DIR)/$(BUILDROOT_VER) -p1 < \
 		$(SYSDRV_DIR)/tools/board/buildroot/patch/usbip/usbip.patch \
 	)
+	grep -q "tailscale/Config.in" $(BUILDROOT_DIR)/$(BUILDROOT_VER)/package/Config.in || ( \
+		mkdir -p $(BUILDROOT_DIR)/$(BUILDROOT_VER)/package/tailscale && \
+		patch -d $(BUILDROOT_DIR)/$(BUILDROOT_VER) -p1 < \
+		$(SYSDRV_DIR)/tools/board/buildroot/patch/tailscale/tailscale.patch \
+	)
 
 	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) $(BUILDROOT_DEFCONFIG) -C $(BUILDROOT_DIR)/$(BUILDROOT_VER)
 	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) source -C $(BUILDROOT_DIR)/$(BUILDROOT_VER)
