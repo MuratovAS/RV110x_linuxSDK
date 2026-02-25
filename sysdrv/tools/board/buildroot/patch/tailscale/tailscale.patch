@@ -10,53 +10,85 @@
  	source "package/tcpreplay/Config.in"
 --- /dev/null
 +++ b/package/tailscale/Config.in
-@@ -0,0 +1,17 @@
+@@ -0,0 +1,15 @@
 +config BR2_PACKAGE_TAILSCALE
 +	bool "tailscale"
 +	help
 +	  Tailscale is a zero-config VPN for building secure networks
-+	  based on WireGuard. It works transparently across NATs and
-+	  firewalls without port forwarding.
++	  based on WireGuard. Built from source v1.70.0 with --extra-small
++	  tags (ts_omit_aws, ts_omit_bird, ts_omit_tap, ts_omit_kube,
++	  ts_omit_completion) to minimize binary size.
 +
-+	  This package installs pre-built tailscale binaries:
-+	    - tailscale:  client CLI tool
-+	    - tailscaled: background daemon
++	  Requires Go toolchain on the build host and internet access
++	  during the first build (Go module downloads via GOPROXY=direct).
 +
 +	  After boot run: tailscale up
 +	  to authenticate and join your tailnet.
 +
-+	  Update TAILSCALE_VERSION in tailscale.mk to the desired release.
-+
 +	  https://tailscale.com/
 --- /dev/null
 +++ b/package/tailscale/tailscale.mk
-@@ -0,0 +1,35 @@
+@@ -0,0 +1,69 @@
 +################################################################################
 +#
 +# tailscale - zero-config VPN using WireGuard
 +#
-+# Uses pre-built static binaries from https://pkgs.tailscale.com/stable/
-+# Update TAILSCALE_VERSION to the latest stable release as needed.
++# Built from source with --extra-small tags to minimize binary size:
++#   ts_omit_aws        - omit AWS/cloud provider metadata detection
++#   ts_omit_bird       - omit BIRD routing daemon integration
++#   ts_omit_tap        - omit TAP/userspace networking support
++#   ts_omit_kube       - omit Kubernetes integration
++#   ts_omit_completion - omit shell completion code
 +#
 +################################################################################
 +
-+TAILSCALE_VERSION = 1.80.0
++TAILSCALE_VERSION = 1.70.0
++TAILSCALE_SITE    = $(call github,tailscale,tailscale,v$(TAILSCALE_VERSION))
 +
++TAILSCALE_LICENSE       = BSD-3-Clause
++TAILSCALE_LICENSE_FILES = LICENSE
++
++# Go arch mapping
 +ifeq ($(ARCH),arm)
-+TAILSCALE_ARCH = arm
++TAILSCALE_GOARCH = arm
++TAILSCALE_GOARM  = 7
 +else ifeq ($(ARCH),aarch64)
-+TAILSCALE_ARCH = arm64
++TAILSCALE_GOARCH = arm64
++TAILSCALE_GOARM  =
 +else ifeq ($(ARCH),x86_64)
-+TAILSCALE_ARCH = amd64
++TAILSCALE_GOARCH = amd64
++TAILSCALE_GOARM  =
 +else
-+TAILSCALE_ARCH = $(ARCH)
++TAILSCALE_GOARCH = $(ARCH)
++TAILSCALE_GOARM  =
 +endif
 +
-+TAILSCALE_SOURCE = tailscale_$(TAILSCALE_VERSION)_$(TAILSCALE_ARCH).tgz
-+TAILSCALE_SITE   = https://pkgs.tailscale.com/stable
++TAILSCALE_GOENV = \
++	CGO_ENABLED=0 \
++	GOOS=linux \
++	GOARCH=$(TAILSCALE_GOARCH) \
++	$(if $(TAILSCALE_GOARM),GOARM=$(TAILSCALE_GOARM)) \
++	GOPROXY=https://proxy.golang.org,direct \
++	GONOSUMDB='*' \
++	GOFLAGS=-mod=mod
 +
-+TAILSCALE_LICENSE = BSD-3-Clause
-+TAILSCALE_LICENSE_FILES = LICENSE
++# --extra-small build tags
++TAILSCALE_TAGS = ts_omit_aws,ts_omit_bird,ts_omit_tap,ts_omit_kube,ts_omit_completion
++
++define TAILSCALE_BUILD_CMDS
++	cd $(@D) && go mod edit \
++		-replace nhooyr.io/websocket@v1.8.10=github.com/coder/websocket@v1.8.10
++	cd $(@D) && $(TAILSCALE_GOENV) go build \
++		-tags "$(TAILSCALE_TAGS)" \
++		-ldflags "-s -w" \
++		-o $(@D)/tailscale \
++		tailscale.com/cmd/tailscale
++	cd $(@D) && $(TAILSCALE_GOENV) go build \
++		-tags "$(TAILSCALE_TAGS)" \
++		-ldflags "-s -w" \
++		-o $(@D)/tailscaled \
++		tailscale.com/cmd/tailscaled
++endef
 +
 +define TAILSCALE_INSTALL_TARGET_CMDS
 +	$(INSTALL) -D -m 0755 $(@D)/tailscale \
