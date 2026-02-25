@@ -34,7 +34,7 @@ export RK_BUILDROOT_DEFCONFIG=rv1106_rvdb_defconfig
 export RK_MISC=blank-misc.img
 
 # Config CMA size in environment
-export RK_BOOTARGS_CMA_SIZE="1M"
+export RK_BOOTARGS_CMA_SIZE="48M"
 
 # config partition in environment
 # RK_PARTITION_CMD_IN_ENV format:
