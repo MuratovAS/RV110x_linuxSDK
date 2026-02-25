@@ -34,7 +34,7 @@ export RK_BUILDROOT_DEFCONFIG=rv1106_rvdb_defconfig
 export RK_MISC=blank-misc.img
 
 # Config CMA size in environment
-export RK_BOOTARGS_CMA_SIZE="48M"
+export RK_BOOTARGS_CMA_SIZE="1M"
 
 # config partition in environment
 # RK_PARTITION_CMD_IN_ENV format:
@@ -65,6 +65,9 @@ export RK_BUILD_APP_TO_OEM_PARTITION=n
 
 # Disable AIISP models (no ISP/camera)
 export RK_AIISP_MODEL=NONE
+
+# Disable S21appinit autostart script
+export RK_DISABLE_APPINIT=y
 
 # Enable Go Hello World app
 export RK_ENABLE_GO_HELLO=y

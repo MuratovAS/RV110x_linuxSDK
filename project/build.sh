@@ -1253,8 +1253,9 @@ function __PACKAGE_OEM()
 		(cd $RK_PROJECT_PACKAGE_ROOTFS_DIR/etc; ln -sf ../oem/usr/share/iqfiles ./)
 	fi
 
-	mkdir -p $(dirname $RK_PROJECT_FILE_OEM_SCRIPT)
-	cat > $RK_PROJECT_FILE_OEM_SCRIPT <<EOF
+	if [ -z "$RK_DISABLE_APPINIT" ]; then
+		mkdir -p $(dirname $RK_PROJECT_FILE_OEM_SCRIPT)
+		cat > $RK_PROJECT_FILE_OEM_SCRIPT <<EOF
 #!/bin/sh
 [ -f /etc/profile.d/RkEnv.sh ] && source /etc/profile.d/RkEnv.sh
 case \$1 in
@@ -1270,8 +1271,9 @@ case \$1 in
 esac
 EOF
 
-	chmod a+x $RK_PROJECT_FILE_OEM_SCRIPT
-	cp -f $RK_PROJECT_FILE_OEM_SCRIPT $RK_PROJECT_PACKAGE_ROOTFS_DIR/etc/init.d
+		chmod a+x $RK_PROJECT_FILE_OEM_SCRIPT
+		cp -f $RK_PROJECT_FILE_OEM_SCRIPT $RK_PROJECT_PACKAGE_ROOTFS_DIR/etc/init.d
+	fi
 }
 
 function __PACKAGE_USERDATA()

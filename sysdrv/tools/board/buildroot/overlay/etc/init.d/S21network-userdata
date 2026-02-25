@@ -8,6 +8,23 @@ USERDATA_DIR=/userdata/network
 USERDATA_CFG=$USERDATA_DIR/interfaces
 ETC_CFG=/etc/network/interfaces
 
+network_init() {
+	ethaddr1=$(ifconfig -a | grep "eth.*HWaddr" | awk '{print $5}')
+
+	if [ -f /userdata/network/ethaddr.txt ]; then
+		ethaddr2=$(cat /userdata/network/ethaddr.txt)
+		if [ "$ethaddr1" = "$ethaddr2" ]; then
+			echo "eth HWaddr cfg ok"
+		else
+			ifconfig eth0 down
+			ifconfig eth0 hw ether "$ethaddr2"
+		fi
+	else
+		echo "$ethaddr1" > /userdata/network/ethaddr.txt
+	fi
+	ifconfig eth0 up && udhcpc -i eth0
+}
+
 start() {
 	mkdir -p "$USERDATA_DIR"
 
@@ -21,6 +38,8 @@ start() {
 		rm -f "$ETC_CFG"
 		ln -sf "$USERDATA_CFG" "$ETC_CFG"
 	fi
+
+	network_init
 }
 
 case "$1" in

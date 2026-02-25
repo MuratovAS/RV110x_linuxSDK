@@ -1,0 +1,22 @@
+#!/bin/sh
+#
+# kernel-tweaks  Apply kernel parameters at boot.
+#
+
+start() {
+	ulimit -c unlimited
+	echo 1 > /proc/sys/vm/overcommit_memory
+}
+
+case "$1" in
+  start)
+	start
+	;;
+  stop|restart|reload)
+	;;
+  *)
+	echo "Usage: $0 {start|stop|restart}"
+	exit 1
+esac
+
+exit 0
