@@ -1,2 +1,2 @@
 export TERM=xterm
-alias la='ls -la'
+alias la='ls -lah'

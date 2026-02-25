@@ -73,7 +73,7 @@
 +	GOFLAGS=-mod=mod
 +
 +# --extra-small build tags
-+TAILSCALE_TAGS = ts_omit_aws,ts_omit_bird,ts_omit_tap,ts_omit_kube,ts_omit_completion
++TAILSCALE_TAGS = ts_omit_aws,ts_omit_bird,ts_omit_tap,ts_omit_kube,ts_omit_completion,ts_omit_systray,ts_omit_taildrop
 +
 +define TAILSCALE_BUILD_CMDS
 +	cd $(@D) && go mod edit \

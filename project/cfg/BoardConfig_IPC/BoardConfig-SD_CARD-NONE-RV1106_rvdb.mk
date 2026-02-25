@@ -34,7 +34,7 @@ export RK_BUILDROOT_DEFCONFIG=rv1106_rvdb_defconfig
 export RK_MISC=blank-misc.img
 
 # Config CMA size in environment
-export RK_BOOTARGS_CMA_SIZE="16M"
+export RK_BOOTARGS_CMA_SIZE="48M"
 
 # config partition in environment
 # RK_PARTITION_CMD_IN_ENV format:
@@ -68,6 +68,9 @@ export RK_AIISP_MODEL=NONE
 
 # Enable Go Hello World app
 export RK_ENABLE_GO_HELLO=y
+
+# Pre-OEM script to strip test binaries before packaging
+export RK_PRE_BUILD_OEM_SCRIPT=rv1106-sd_card-pre_oem.sh
 
 # Enable recovery
 export RK_ENABLE_OTA=y

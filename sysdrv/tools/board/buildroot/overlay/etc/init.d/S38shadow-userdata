@@ -1,0 +1,38 @@
+#!/bin/sh
+#
+# shadow-userdata  Redirect /etc/shadow to userdata
+#                  so password changes persist across firmware updates.
+#
+
+USERDATA_DIR=/userdata/shadow
+USERDATA_CFG=$USERDATA_DIR/shadow
+ETC_CFG=/etc/shadow
+
+start() {
+	mkdir -p "$USERDATA_DIR"
+
+	# Copy default config to userdata on first boot after flashing
+	if [ ! -f "$USERDATA_CFG" ]; then
+		cp "$ETC_CFG" "$USERDATA_CFG"
+		chmod 640 "$USERDATA_CFG"
+	fi
+
+	# Replace /etc/shadow with symlink to userdata
+	if [ ! -L "$ETC_CFG" ]; then
+		rm -f "$ETC_CFG"
+		ln -sf "$USERDATA_CFG" "$ETC_CFG"
+	fi
+}
+
+case "$1" in
+  start)
+	start
+	;;
+  stop|restart|reload)
+	;;
+  *)
+	echo "Usage: $0 {start|stop|restart}"
+	exit 1
+esac
+
+exit 0
