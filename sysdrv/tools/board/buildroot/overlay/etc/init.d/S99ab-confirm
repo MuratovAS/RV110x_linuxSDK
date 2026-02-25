@@ -10,6 +10,8 @@ case "$1" in
 		printf "Confirming A/B boot slot: "
 		$RK_OTA --misc=now && echo "OK" || echo "FAILED"
 	fi
+	# Remove OTA image after successful boot
+	rm -f /userdata/update_ota.tar
 	;;
   stop|restart|reload)
 	;;

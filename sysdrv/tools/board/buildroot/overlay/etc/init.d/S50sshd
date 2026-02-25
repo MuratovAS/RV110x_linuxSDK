@@ -10,8 +10,14 @@ umask 077
 
 start() {
 	chown root:root /var/empty/
-	# Create any missing keys
-	/usr/bin/ssh-keygen -A
+
+	# Store host keys in userdata (persistent across firmware updates)
+	mkdir -p /userdata/ssh
+	chmod 700 /userdata/ssh
+	for type in rsa ecdsa ed25519; do
+		key="/userdata/ssh/ssh_host_${type}_key"
+		[ -f "$key" ] || /usr/bin/ssh-keygen -t "$type" -f "$key" -N ""
+	done
 
 	printf "Starting sshd: "
 	/usr/sbin/sshd

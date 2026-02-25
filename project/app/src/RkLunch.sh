@@ -70,9 +70,11 @@ post_chk()
 	fi
 
 	network_init &
-	check_linker /userdata   /oem/usr/www/userdata
-	check_linker /media/usb0 /oem/usr/www/usb0
-	check_linker /mnt/sdcard /oem/usr/www/sdcard
+	if [ -d /oem/usr/www ]; then
+		check_linker /userdata   /oem/usr/www/userdata
+		check_linker /media/usb0 /oem/usr/www/usb0
+		check_linker /mnt/sdcard /oem/usr/www/sdcard
+	fi
 }
 
 rcS

@@ -10,7 +10,7 @@ CURRENT_DIR := $(shell pwd)
 PKG_NAME    := go_hello
 PKG_BIN     := $(PKG_NAME)
 PKG_BIN_INSTALL_DIR := out
-PKG_BIN_INSTALL     := $(PKG_BIN_INSTALL_DIR)/usr/bin
+PKG_BIN_INSTALL     := $(PKG_BIN_INSTALL_DIR)/opt/go_hello
 
 # Go cross-compilation settings for ARM uclibc
 GOARCH      := arm
