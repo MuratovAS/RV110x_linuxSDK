@@ -1,0 +1,50 @@
+#!/bin/sh
+#
+# usbpwr - USB port power control
+#
+# Usage: usbpwr <port> <on|off>
+#   port: 1-4 for individual port, 0 for all ports
+#
+# Port to GPIO mapping (chip 1, active-high):
+#   port 1 -> pin 24
+#   port 2 -> pin 25
+#   port 3 -> pin 26
+#   port 4 -> pin 27
+
+GPIO_CHIP=1
+GPIO_BASE=24
+NUM_PORTS=4
+
+usage() {
+	echo "Usage: $0 <port> <on|off>"
+	echo "  port: 1-${NUM_PORTS} for individual port, 0 for all ports"
+	exit 1
+}
+
+set_port() {
+	local pin=$((GPIO_BASE + $1 - 1))
+	gpioset ${GPIO_CHIP} ${pin}=$2
+}
+
+[ $# -eq 2 ] || usage
+
+PORT=$1
+case "$2" in
+  on)  VAL=1 ;;
+  off) VAL=0 ;;
+  *)   usage ;;
+esac
+
+case "$PORT" in
+  0)
+	for i in $(seq 1 ${NUM_PORTS}); do
+		set_port $i $VAL
+	done
+	;;
+  [1-4])
+	set_port $PORT $VAL
+	;;
+  *)
+	usage
+	;;
+esac

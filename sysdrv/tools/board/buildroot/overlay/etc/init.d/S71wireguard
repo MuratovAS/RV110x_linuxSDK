@@ -1,0 +1,44 @@
+#!/bin/sh
+#
+# wireguard    Starts WireGuard VPN interface wg0.
+#
+
+IFACE=wg0
+CONFIG=/etc/wireguard/${IFACE}.conf
+
+[ -f $CONFIG ] || exit 0
+[ -x /usr/bin/wg-quick ] || exit 0
+
+start() {
+	printf "Starting WireGuard ${IFACE}: "
+	wg-quick up ${IFACE}
+	echo "OK"
+}
+
+stop() {
+	printf "Stopping WireGuard ${IFACE}: "
+	wg-quick down ${IFACE}
+	echo "OK"
+}
+
+restart() {
+	stop
+	start
+}
+
+case "$1" in
+  start)
+	start
+	;;
+  stop)
+	stop
+	;;
+  restart|reload)
+	restart
+	;;
+  *)
+	echo "Usage: $0 {start|stop|restart}"
+	exit 1
+esac
+
+exit $?

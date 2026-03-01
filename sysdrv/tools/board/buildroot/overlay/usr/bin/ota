@@ -1,0 +1,36 @@
+#!/bin/sh
+#
+# ota - OTA update and partition switch utility
+#
+# Usage:
+#   ota switch          - reboot into the other A/B partition
+#   ota update [path]   - install OTA update package and reboot
+#                         default path: /userdata/update_ota.tar
+
+OTA_DEFAULT_TAR=/userdata/update_ota.tar
+OTA_SAVE_DIR=/userdata/
+
+usage() {
+	echo "Usage: $0 <command>"
+	echo "  switch          Reboot into the other A/B partition"
+	echo "  update [path]   Install OTA update (default: ${OTA_DEFAULT_TAR})"
+	exit 1
+}
+
+[ $# -ge 1 ] || usage
+
+case "$1" in
+  switch)
+	echo "Switching to other partition and rebooting..."
+	rk_ota --misc=other --reboot
+	;;
+  update)
+	TAR=${2:-$OTA_DEFAULT_TAR}
+	[ -f "$TAR" ] || { echo "Error: update package not found: $TAR"; exit 1; }
+	echo "Installing OTA update from $TAR ..."
+	rk_ota --misc=update --tar_path="$TAR" --save_dir="$OTA_SAVE_DIR" --partition=all --reboot
+	;;
+  *)
+	usage
+	;;
+esac

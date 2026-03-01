@@ -69,8 +69,9 @@ export RK_AIISP_MODEL=NONE
 # Disable S21appinit autostart script
 export RK_DISABLE_APPINIT=y
 
-# Enable Go Hello World app
-export RK_ENABLE_GO_HELLO=y
+
+# Enable UI Package Manager app (frontend: host npm build, backend: ARM cross-compiled)
+export RK_ENABLE_UIPM=y
 
 # Pre-OEM script to strip test binaries before packaging
 export RK_PRE_BUILD_OEM_SCRIPT=rv1106-sd_card-pre_oem.sh

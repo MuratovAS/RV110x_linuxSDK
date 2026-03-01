@@ -1,0 +1,32 @@
+#!/bin/sh
+#
+# wireguard-userdata  Redirect /etc/wireguard to userdata
+#                     so WireGuard config persists across firmware updates.
+#
+
+USERDATA_DIR=/userdata/wireguard
+ETC_DIR=/etc/wireguard
+
+start() {
+	mkdir -p "$USERDATA_DIR"
+	chmod 700 "$USERDATA_DIR"
+
+	# Replace /etc/wireguard with symlink to userdata
+	if [ ! -L "$ETC_DIR" ]; then
+		rm -rf "$ETC_DIR"
+		ln -sf "$USERDATA_DIR" "$ETC_DIR"
+	fi
+}
+
+case "$1" in
+  start)
+	start
+	;;
+  stop|restart|reload)
+	;;
+  *)
+	echo "Usage: $0 {start|stop|restart}"
+	exit 1
+esac
+
+exit 0
