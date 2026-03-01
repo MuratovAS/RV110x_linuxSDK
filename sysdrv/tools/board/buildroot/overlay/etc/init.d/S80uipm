@@ -5,7 +5,7 @@
 
 DAEMON=/opt/uipm/uipm
 PIDFILE=/var/run/uipm.pid
-DAEMON_ARGS="-addr :80 -dir /opt/uipm/dist -config /userdata/uipm/config.json"
+DAEMON_ARGS="-addr :80 -dir /opt/uipm/dist -config /etc/uipm/config.json"
 
 [ -f $DAEMON ] || exit 0
 

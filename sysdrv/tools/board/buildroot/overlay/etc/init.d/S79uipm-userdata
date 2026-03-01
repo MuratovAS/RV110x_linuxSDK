@@ -1,0 +1,31 @@
+#!/bin/sh
+#
+# uipm-userdata  Redirect /etc/uipm to userdata
+#                so uipm config persists across firmware updates.
+#
+
+USERDATA_DIR=/userdata/uipm
+ETC_DIR=/etc/uipm
+
+start() {
+	mkdir -p "$USERDATA_DIR"
+
+	# Replace /etc/uipm with symlink to userdata
+	if [ ! -L "$ETC_DIR" ]; then
+		rm -rf "$ETC_DIR"
+		ln -sf "$USERDATA_DIR" "$ETC_DIR"
+	fi
+}
+
+case "$1" in
+  start)
+	start
+	;;
+  stop|restart|reload)
+	;;
+  *)
+	echo "Usage: $0 {start|stop|restart}"
+	exit 1
+esac
+
+exit 0

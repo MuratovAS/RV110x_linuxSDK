@@ -1,24 +1,50 @@
 #!/bin/sh
 #
-# wireguard    Starts WireGuard VPN interface wg0.
+# wireguard    Starts all WireGuard VPN interfaces from /etc/wireguard/*.conf
+#              Retries each interface every 10 s in the background until up.
 #
 
-IFACE=wg0
-CONFIG=/etc/wireguard/${IFACE}.conf
+CONFDIR=/etc/wireguard
+RETRY_INTERVAL=10
 
-[ -f $CONFIG ] || exit 0
+[ -d $CONFDIR ] || exit 0
 [ -x /usr/bin/wg-quick ] || exit 0
 
+# bring_up_loop <iface>
+# Tries wg-quick up in a loop until it succeeds, then exits.
+bring_up_loop() {
+	iface="$1"
+	while true; do
+		if wg-quick up "${iface}" 2>/dev/null; then
+			echo "WireGuard ${iface}: up"
+			break
+		fi
+		echo "WireGuard ${iface}: failed, retrying in ${RETRY_INTERVAL}s"
+		sleep ${RETRY_INTERVAL}
+	done
+}
+
 start() {
-	printf "Starting WireGuard ${IFACE}: "
-	wg-quick up ${IFACE}
-	echo "OK"
+	for conf in $CONFDIR/*.conf; do
+		[ -f "$conf" ] || continue
+		iface=$(basename "$conf" .conf)
+		if [ "$(head -n1 "$conf")" = "#Enabled=false" ]; then
+			echo "WireGuard ${iface} disabled, skipping."
+			continue
+		fi
+		echo "Starting WireGuard ${iface} (background retry loop)..."
+		bring_up_loop "${iface}" &
+	done
 }
 
 stop() {
-	printf "Stopping WireGuard ${IFACE}: "
-	wg-quick down ${IFACE}
-	echo "OK"
+	for conf in $CONFDIR/*.conf; do
+		[ -f "$conf" ] || continue
+		iface=$(basename "$conf" .conf)
+		printf "Stopping WireGuard ${iface}: "
+		wg-quick down "${iface}" 2>/dev/null
+		echo "OK"
+	done
 }
 
 restart() {
@@ -41,4 +67,4 @@ case "$1" in
 	exit 1
 esac
 
-exit $?
+exit 0
