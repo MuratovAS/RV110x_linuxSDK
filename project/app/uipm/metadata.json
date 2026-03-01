@@ -1,0 +1,5 @@
+{
+  "name": "USBIP Hub Manager",
+  "description": "A clean, single-page interface for managing USBIP devices, hub power, and network/VPN settings.",
+  "requestFramePermissions": []
+}
