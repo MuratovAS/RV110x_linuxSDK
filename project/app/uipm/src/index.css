@@ -8,8 +8,16 @@
   }
 }
 
+.dark body {
+  @apply bg-slate-900 text-slate-100;
+}
+
 .card {
   @apply bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden;
+}
+
+.dark .card {
+  @apply bg-slate-800 border-slate-700;
 }
 
 .btn-primary {
@@ -17,7 +25,11 @@
 }
 
 .input-field {
-  @apply w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon transition-all text-sm;
+  @apply w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon transition-all text-sm bg-white text-slate-900;
+}
+
+.dark .input-field {
+  @apply bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-400 focus:ring-maroon/30;
 }
 
 .toggle-switch {

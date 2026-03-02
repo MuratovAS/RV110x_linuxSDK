@@ -73,6 +73,7 @@ export interface SSHKey {
 
 export interface SystemConfig {
   hostname?: string;
+  theme?: 'dark' | 'light';
   // Transient fields only used in PUT requests — never returned by GET
   password?: string;
   clearPassword?: boolean;

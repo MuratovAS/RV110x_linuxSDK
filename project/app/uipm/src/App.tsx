@@ -19,7 +19,9 @@ import {
   Monitor,
   Shield,
   Check,
-  AlertTriangle
+  AlertTriangle,
+  Moon,
+  Sun
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
@@ -56,7 +58,7 @@ const DeviceTree: React.FC<{ device: USBDevice; depth?: number }> = ({ device, d
   return (
     <div className="flex flex-col">
       <div 
-        className={`flex items-center gap-2 py-1.5 px-2 rounded-md hover:bg-slate-50 transition-colors ${depth > 0 ? 'ml-4 border-l border-slate-200' : ''}`}
+        className={`flex items-center gap-2 py-1.5 px-2 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${depth > 0 ? 'ml-4 border-l border-slate-200 dark:border-slate-600' : ''}`}
       >
         {device.type === 'hub' ? (
           <Server className={`w-4 h-4 ${device.isBusy ? 'text-maroon' : 'text-slate-400'}`} />
@@ -65,10 +67,10 @@ const DeviceTree: React.FC<{ device: USBDevice; depth?: number }> = ({ device, d
         )}
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-slate-700">{device.name}</span>
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{device.name}</span>
           </div>
           {device.vendorId && (
-            <span className="text-[10px] text-slate-400 font-mono">
+            <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">
               {device.id} [{device.vendorId}:{device.productId}]
             </span>
           )}
@@ -139,7 +141,7 @@ const SignalBars: React.FC<{ signal: number }> = ({ signal }) => {
       {[1, 2, 3, 4].map(i => (
         <div
           key={i}
-          className={`w-1 rounded-sm ${i <= strength ? 'bg-maroon' : 'bg-slate-200'}`}
+          className={`w-1 rounded-sm ${i <= strength ? 'bg-maroon' : 'bg-slate-200 dark:bg-slate-600'}`}
           style={{ height: `${i * 25}%` }}
         />
       ))}
@@ -160,7 +162,7 @@ type IfaceMap = Record<string, { ipv4: string[]; ipv6: string[]; mac: string }>;
 
 const InterfaceDetails: React.FC<{ patterns: RegExp[]; ifaces: IfaceMap }> = ({ patterns, ifaces }) => {
   const entry = Object.entries(ifaces).find(([name]) => patterns.some(p => p.test(name)));
-  if (!entry) return <p className="text-[11px] text-slate-400 py-1">No active interface</p>;
+  if (!entry) return <p className="text-[11px] text-slate-400 dark:text-slate-500 py-1">No active interface</p>;
   const [name, info] = entry;
   const rows: { label: string; value: string }[] = [
     { label: 'iface', value: name },
@@ -172,15 +174,35 @@ const InterfaceDetails: React.FC<{ patterns: RegExp[]; ifaces: IfaceMap }> = ({ 
     <div className="space-y-1 text-[11px] font-mono">
       {rows.map((r, i) => (
         <div key={i} className="flex gap-3">
-          <span className="text-slate-400 w-10 shrink-0">{r.label}</span>
-          <span className="text-slate-600 break-all">{r.value}</span>
+          <span className="text-slate-400 dark:text-slate-500 w-10 shrink-0">{r.label}</span>
+          <span className="text-slate-600 dark:text-slate-300 break-all">{r.value}</span>
         </div>
       ))}
     </div>
   );
 };
 
+const getThemeCookie = (): 'dark' | 'light' | undefined =>
+  document.cookie.split('; ').find(r => r.startsWith('theme='))?.split('=')[1] as 'dark' | 'light' | undefined;
+
+const setThemeCookie = (theme: 'dark' | 'light') => {
+  document.cookie = `theme=${theme}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
+};
+
 export default function App() {
+  const [darkMode, setDarkMode] = useState<boolean>(() => getThemeCookie() === 'dark');
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    setThemeCookie(darkMode ? 'dark' : 'light');
+  }, [darkMode]);
+
+  const toggleDarkMode = () => setDarkMode(prev => !prev);
+
   const [networkHistory, setNetworkHistory] = useState<{rx: number, tx: number}[]>(
     Array.from({ length: 60 }, () => ({ rx: 0, tx: 0 }))
   );
@@ -359,7 +381,7 @@ export default function App() {
     const ts = overrides.tailscale ?? savedTsConfig;
     const portsList = overrides.ports ?? ports;
     const sshKeysList = overrides.ssh ?? sshKeys;
-    const sys: SystemConfig = overrides.system ?? { hostname: savedHostname };
+    const sys: SystemConfig = overrides.system ?? { hostname: savedHostname, theme: darkMode ? 'dark' : 'light' };
     const fw = overrides.firewall ?? savedFirewallConfig;
     fetch('/api/config', {
       method: 'PUT',
@@ -376,6 +398,17 @@ export default function App() {
       }),
     }).catch(console.error);
   };
+
+  const isFirstRender = useRef(true);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    saveToServer({ system: { hostname: savedHostname, theme: darkMode ? 'dark' : 'light' } });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [darkMode]);
 
   const [appVersion, setAppVersion] = React.useState('...');
 
@@ -413,6 +446,9 @@ export default function App() {
         if (data.system?.hostname) {
           setSavedHostname(data.system.hostname);
           setHostname(data.system.hostname);
+        }
+        if (data.system?.theme) {
+          setDarkMode(data.system.theme === 'dark');
         }
         if (data.firewall) {
           setFirewallConfig(data.firewall);
@@ -543,7 +579,7 @@ export default function App() {
       return;
     }
     setPasswordError('');
-    const sys: SystemConfig = { hostname };
+    const sys: SystemConfig = { hostname, theme: darkMode ? 'dark' : 'light' };
     if (newPassword) {
       sys.password = newPassword;
     }
@@ -593,7 +629,7 @@ export default function App() {
   // Loading auth state
   if (isAuthenticated === null) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
         <div className="w-5 h-5 border-2 border-maroon border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -602,7 +638,7 @@ export default function App() {
   // Login screen
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 p-4">
         <div className="w-full max-w-sm">
           <div className="card p-8 flex flex-col gap-6">
             <div className="flex flex-col items-center gap-3">
@@ -610,8 +646,8 @@ export default function App() {
                 <Lock className="w-7 h-7 text-maroon" />
               </div>
               <div className="text-center">
-                <h1 className="text-xl font-bold text-slate-800">USBIP Hub Manager</h1>
-                <p className="text-sm text-slate-500 mt-1">Enter password to sign in</p>
+                <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">USBIP Hub Manager</h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Enter password to sign in</p>
               </div>
             </div>
 
@@ -644,7 +680,7 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col max-w-6xl mx-auto p-4 md:p-8 gap-8">
       {/* Network Status Header */}
-      <header className="relative flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <header className="relative flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
         {/* Background Chart */}
         <div className="absolute inset-0 z-0 pointer-events-none">
           <CombinedNetworkChart history={networkHistory} />
@@ -655,21 +691,28 @@ export default function App() {
             <Activity className="w-6 h-6 text-maroon" />
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">USBIP Hub Manager</h1>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">USBIP Hub Manager</h1>
           </div>
         </div>
 
-        <div className="relative z-10 flex items-center gap-6 pr-2">
+        <div className="relative z-10 flex items-center gap-4 pr-2">
           <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-tight">
             <div className="flex flex-col items-end">
-              <span className="text-slate-400 text-[8px]">Receive</span>
-              <span className="text-slate-600 font-mono">{fmtSpeed(networkHistory[networkHistory.length - 1].rx)}</span>
+              <span className="text-slate-400 dark:text-slate-500 text-[8px]">Receive</span>
+              <span className="text-slate-600 dark:text-slate-300 font-mono">{fmtSpeed(networkHistory[networkHistory.length - 1].rx)}</span>
             </div>
             <div className="flex flex-col items-end">
               <span className="text-maroon text-[8px]">Transmit</span>
-              <span className="text-slate-600 font-mono">{fmtSpeed(networkHistory[networkHistory.length - 1].tx)}</span>
+              <span className="text-slate-600 dark:text-slate-300 font-mono">{fmtSpeed(networkHistory[networkHistory.length - 1].tx)}</span>
             </div>
           </div>
+          <button
+            onClick={toggleDarkMode}
+            className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-500 dark:text-slate-300 transition-colors"
+            title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
         </div>
       </header>
 
@@ -680,7 +723,7 @@ export default function App() {
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
-            className="flex items-center justify-between gap-3 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl"
+            className="flex items-center justify-between gap-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-xl"
           >
             <span className="font-mono text-xs break-all">{err.message}</span>
             <button
@@ -702,37 +745,37 @@ export default function App() {
               <Usb className="w-5 h-5 text-maroon" />
               USB Ports & Devices
             </h2>
-            <span className="text-xs font-medium text-slate-400 uppercase tracking-widest">4-Port Controller</span>
+            <span className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-widest">4-Port Controller</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {ports.map((port) => (
-              <div key={port.id} className="card p-5 flex flex-col gap-4 min-h-[200px]">
+              <div key={port.id} className="card p-5 flex flex-col gap-4 min-h-[280px]">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${port.power ? 'bg-maroon text-white' : 'bg-slate-100 text-slate-400'}`}>
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${port.power ? 'bg-maroon text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'}`}>
                       {port.id}
                     </div>
-                    <span className="font-bold text-slate-700">Port {port.id}</span>
+                    <span className="font-bold text-slate-700 dark:text-slate-200">Port {port.id}</span>
                   </div>
                   
                   <button 
                     onClick={() => togglePortPower(port.id)}
-                    className={`toggle-switch ${port.power ? 'bg-maroon' : 'bg-slate-200'}`}
+                    className={`toggle-switch ${port.power ? 'bg-maroon' : 'bg-slate-200 dark:bg-slate-600'}`}
                   >
                     <span className={`toggle-thumb ${port.power ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
                 </div>
 
-                <div className="flex-1 bg-slate-50/50 rounded-lg p-3 border border-dashed border-slate-200">
+                <div className="flex-1 bg-slate-100/60 dark:bg-slate-700/30 rounded-lg p-3 border border-dashed border-slate-200 dark:border-slate-600">
                   {!port.power ? (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-2 opacity-50">
+                    <div className="h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 gap-2 opacity-50">
                       <Power className="w-6 h-6" />
                       <span className="text-xs font-medium">Power Disabled</span>
                     </div>
                   ) : usbDevices.filter(d => d.port === port.id).length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-slate-300 animate-pulse" />
+                    <div className="h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600 animate-pulse" />
                       <span className="text-xs font-medium">Empty</span>
                     </div>
                   ) : (
@@ -770,26 +813,26 @@ export default function App() {
               {!savedEthConfig.blocked && <div className="card p-5 flex flex-col gap-4 group">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${hasIP(ifaceIPs([/^eth\d/, /^en[opsx]?\d/, /^en\d/])) ? 'bg-maroon/10' : 'bg-slate-100'}`}>
-                      <Network className={`w-5 h-5 transition-colors ${hasIP(ifaceIPs([/^eth\d/, /^en[opsx]?\d/, /^en\d/])) ? 'text-maroon' : 'text-slate-500'}`} />
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${hasIP(ifaceIPs([/^eth\d/, /^en[opsx]?\d/, /^en\d/])) ? 'bg-maroon/10' : 'bg-slate-100 dark:bg-slate-700'}`}>
+                      <Network className={`w-5 h-5 transition-colors ${hasIP(ifaceIPs([/^eth\d/, /^en[opsx]?\d/, /^en\d/])) ? 'text-maroon' : 'text-slate-500 dark:text-slate-400'}`} />
                     </div>
                     <div className="leading-tight">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-slate-800">Ethernet</h3>
+                        <h3 className="font-bold text-slate-800 dark:text-slate-200">Ethernet</h3>
                         <button
                           onClick={() => setIsEthEditing(!isEthEditing)}
-                          className={`p-1 rounded-md transition-all ${isEthEditing ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 text-slate-400'} ${isEthEditing || isEthInfo ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                          className={`p-1 rounded-md transition-all ${isEthEditing ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500'} ${isEthEditing || isEthInfo ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                         >
                           <Edit2 className="w-3 h-3" />
                         </button>
                         <button
                           onClick={() => setIsEthInfo(!isEthInfo)}
-                          className={`p-1 rounded-md transition-all ${isEthInfo ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 text-slate-400'} ${isEthEditing || isEthInfo ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                          className={`p-1 rounded-md transition-all ${isEthInfo ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500'} ${isEthEditing || isEthInfo ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                         >
                           <Info className="w-3 h-3" />
                         </button>
                       </div>
-                      <span className="text-xs font-mono font-medium text-slate-500">
+                      <span className="text-xs font-mono font-medium text-slate-500 dark:text-slate-400">
                         <IpDisplay
                           info={ifaceIPs([/^eth\d/, /^en[opsx]?\d/, /^en\d/])}
                           fallback="Disconnected"
@@ -807,16 +850,16 @@ export default function App() {
                       exit={{ opacity: 0, height: 0 }}
                       className="space-y-4 overflow-hidden"
                     >
-                      <div className="flex p-1 bg-slate-100 rounded-lg">
-                        <button 
+                      <div className="flex p-1 bg-slate-100 dark:bg-slate-700 rounded-lg">
+                        <button
                           onClick={() => setEthConfig({...ethConfig, mode: 'dhcp'})}
-                          className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${ethConfig.mode === 'dhcp' ? 'bg-white shadow-sm text-maroon' : 'text-slate-500'}`}
+                          className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${ethConfig.mode === 'dhcp' ? 'bg-white dark:bg-slate-600 shadow-sm text-maroon' : 'text-slate-500 dark:text-slate-400'}`}
                         >
                           DHCP
                         </button>
-                        <button 
+                        <button
                           onClick={() => setEthConfig({...ethConfig, mode: 'static'})}
-                          className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${ethConfig.mode === 'static' ? 'bg-white shadow-sm text-maroon' : 'text-slate-500'}`}
+                          className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${ethConfig.mode === 'static' ? 'bg-white dark:bg-slate-600 shadow-sm text-maroon' : 'text-slate-500 dark:text-slate-400'}`}
                         >
                           STATIC
                         </button>
@@ -825,7 +868,7 @@ export default function App() {
                       {ethConfig.mode === 'static' && (
                         <div className="flex flex-col gap-4">
                           <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase">IP Address</label>
+                            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">IP Address</label>
                             <input 
                               type="text" 
                               className="input-field" 
@@ -835,7 +878,7 @@ export default function App() {
                             />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase">Subnet Mask</label>
+                            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Subnet Mask</label>
                             <input
                               type="text"
                               className="input-field"
@@ -845,7 +888,7 @@ export default function App() {
                             />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase">Gateway</label>
+                            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Gateway</label>
                             <input
                               type="text"
                               className="input-field"
@@ -878,7 +921,7 @@ export default function App() {
                       exit={{ opacity: 0, height: 0 }}
                       className="overflow-hidden"
                     >
-                      <div className="pt-3 border-t border-slate-100">
+                      <div className="pt-3 border-t border-slate-100 dark:border-slate-700">
                         <InterfaceDetails patterns={[/^eth\d/, /^en[opsx]?\d/, /^en\d/]} ifaces={ifaces} />
                       </div>
                     </motion.div>
@@ -890,26 +933,26 @@ export default function App() {
               {!savedWifiConfig.blocked && <div className="card p-5 flex flex-col gap-4 group">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${hasIP(ifaceIPs([/^wlan\d/, /^wlp\d/, /^wl\d/])) ? 'bg-maroon/10' : 'bg-slate-100'}`}>
-                      <Wifi className={`w-5 h-5 transition-colors ${hasIP(ifaceIPs([/^wlan\d/, /^wlp\d/, /^wl\d/])) ? 'text-maroon' : 'text-slate-500'}`} />
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${hasIP(ifaceIPs([/^wlan\d/, /^wlp\d/, /^wl\d/])) ? 'bg-maroon/10' : 'bg-slate-100 dark:bg-slate-700'}`}>
+                      <Wifi className={`w-5 h-5 transition-colors ${hasIP(ifaceIPs([/^wlan\d/, /^wlp\d/, /^wl\d/])) ? 'text-maroon' : 'text-slate-500 dark:text-slate-400'}`} />
                     </div>
                     <div className="leading-tight">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-slate-800">WiFi</h3>
+                        <h3 className="font-bold text-slate-800 dark:text-slate-200">WiFi</h3>
                         <button
                           onClick={() => setIsWifiEditing(!isWifiEditing)}
-                          className={`p-1 rounded-md transition-all ${isWifiEditing ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 text-slate-400'} ${isWifiEditing || isWifiInfo ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                          className={`p-1 rounded-md transition-all ${isWifiEditing ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500'} ${isWifiEditing || isWifiInfo ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                         >
                           <Edit2 className="w-3 h-3" />
                         </button>
                         <button
                           onClick={() => setIsWifiInfo(!isWifiInfo)}
-                          className={`p-1 rounded-md transition-all ${isWifiInfo ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 text-slate-400'} ${isWifiEditing || isWifiInfo ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                          className={`p-1 rounded-md transition-all ${isWifiInfo ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500'} ${isWifiEditing || isWifiInfo ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                         >
                           <Info className="w-3 h-3" />
                         </button>
                       </div>
-                      <span className="text-xs font-mono font-medium text-slate-500">
+                      <span className="text-xs font-mono font-medium text-slate-500 dark:text-slate-400">
                         {wifiConfig.enabled
                           ? <IpDisplay
                               info={ifaceIPs([/^wlan\d/, /^wlp\d/, /^wl\d/])}
@@ -926,7 +969,7 @@ export default function App() {
                       setSavedWifiConfig(next);
                       saveToServer({ wifi: next });
                     }}
-                    className={`toggle-switch ${wifiConfig.enabled ? 'bg-maroon' : 'bg-slate-200'}`}
+                    className={`toggle-switch ${wifiConfig.enabled ? 'bg-maroon' : 'bg-slate-200 dark:bg-slate-600'}`}
                   >
                     <span className={`toggle-thumb ${wifiConfig.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
@@ -943,7 +986,7 @@ export default function App() {
                       {/* Network list */}
                       <div className="space-y-1">
                         <div className="flex items-center justify-between">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase">Available Networks</label>
+                          <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Available Networks</label>
                           <button
                             onClick={scanWifi}
                             disabled={wifiScanning}
@@ -952,9 +995,9 @@ export default function App() {
                             {wifiScanning ? 'Scanning…' : 'Scan'}
                           </button>
                         </div>
-                        <div className="max-h-40 overflow-y-auto flex flex-col gap-0.5 rounded-lg border border-slate-200 p-1 bg-slate-50/50">
+                        <div className="max-h-40 overflow-y-auto flex flex-col gap-0.5 rounded-lg border border-slate-200 dark:border-slate-600 p-1 bg-slate-50/50 dark:bg-slate-700/50">
                           {wifiNetworks.length === 0 ? (
-                            <p className="text-[10px] text-slate-400 text-center py-3">
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center py-3">
                               {wifiScanning ? 'Scanning for networks…' : 'No networks found'}
                             </p>
                           ) : wifiNetworks.map(net => (
@@ -965,12 +1008,12 @@ export default function App() {
                                 ssid: net.ssid,
                                 security: net.security as WiFiSecurity,
                               })}
-                              className={`flex items-center justify-between px-2 py-1.5 rounded-md text-left transition-colors hover:bg-white ${wifiConfig.ssid === net.ssid ? 'bg-white border border-maroon/20 shadow-sm' : ''}`}
+                              className={`flex items-center justify-between px-2 py-1.5 rounded-md text-left transition-colors hover:bg-white dark:hover:bg-slate-600 ${wifiConfig.ssid === net.ssid ? 'bg-white dark:bg-slate-600 border border-maroon/20 shadow-sm' : ''}`}
                             >
-                              <span className="text-xs font-medium text-slate-700 truncate mr-2">{net.ssid}</span>
+                              <span className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate mr-2">{net.ssid}</span>
                               <div className="flex items-center gap-1.5 shrink-0">
                                 <SignalBars signal={net.signal} />
-                                {net.security !== 'open' && <Lock className="w-2.5 h-2.5 text-slate-400" />}
+                                {net.security !== 'open' && <Lock className="w-2.5 h-2.5 text-slate-400 dark:text-slate-500" />}
                               </div>
                             </button>
                           ))}
@@ -979,7 +1022,7 @@ export default function App() {
 
                       {/* SSID manual input */}
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase">SSID</label>
+                        <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">SSID</label>
                         <input
                           type="text"
                           className="input-field"
@@ -991,13 +1034,13 @@ export default function App() {
 
                       {/* Security type */}
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase">Security</label>
-                        <div className="flex p-1 bg-slate-100 rounded-lg">
+                        <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Security</label>
+                        <div className="flex p-1 bg-slate-100 dark:bg-slate-700 rounded-lg">
                           {(['wpa2', 'open'] as const).map(sec => (
                             <button
                               key={sec}
                               onClick={() => setWifiConfig({...wifiConfig, security: sec})}
-                              className={`flex-1 py-1.5 text-[10px] font-bold rounded-md transition-all ${(wifiConfig.security ?? 'wpa2') === sec ? 'bg-white shadow-sm text-maroon' : 'text-slate-500'}`}
+                              className={`flex-1 py-1.5 text-[10px] font-bold rounded-md transition-all ${(wifiConfig.security ?? 'wpa2') === sec ? 'bg-white dark:bg-slate-600 shadow-sm text-maroon' : 'text-slate-500 dark:text-slate-400'}`}
                             >
                               {sec === 'wpa2' ? 'WPA/WPA2-PSK' : 'Open'}
                             </button>
@@ -1008,7 +1051,7 @@ export default function App() {
                       {/* Password — hidden for open networks */}
                       {(wifiConfig.security ?? 'wpa2') !== 'open' && (
                         <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase">Password</label>
+                          <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Password</label>
                           <input
                             type="password"
                             className="input-field"
@@ -1040,7 +1083,7 @@ export default function App() {
                       exit={{ opacity: 0, height: 0 }}
                       className="overflow-hidden"
                     >
-                      <div className="pt-3 border-t border-slate-100">
+                      <div className="pt-3 border-t border-slate-100 dark:border-slate-700">
                         <InterfaceDetails patterns={[/^wlan\d/, /^wlp\d/, /^wl\d/]} ifaces={ifaces} />
                       </div>
                     </motion.div>
@@ -1062,26 +1105,26 @@ export default function App() {
               {!savedTsConfig.blocked && <div className="card p-5 flex flex-col gap-4 group">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${hasIP(ifaceIPs([/^tailscale/])) ? 'bg-maroon/10' : 'bg-slate-100'}`}>
-                      <Settings2 className={`w-5 h-5 transition-colors ${hasIP(ifaceIPs([/^tailscale/])) ? 'text-maroon' : 'text-slate-500'}`} />
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${hasIP(ifaceIPs([/^tailscale/])) ? 'bg-maroon/10' : 'bg-slate-100 dark:bg-slate-700'}`}>
+                      <Settings2 className={`w-5 h-5 transition-colors ${hasIP(ifaceIPs([/^tailscale/])) ? 'text-maroon' : 'text-slate-500 dark:text-slate-400'}`} />
                     </div>
                     <div className="leading-tight">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-slate-800">Tailscale</h3>
+                        <h3 className="font-bold text-slate-800 dark:text-slate-200">Tailscale</h3>
                         <button
                           onClick={() => setIsTsEditing(!isTsEditing)}
-                          className={`p-1 rounded-md transition-all ${isTsEditing ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 text-slate-400'} ${isTsEditing || isTsInfo ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                          className={`p-1 rounded-md transition-all ${isTsEditing ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500'} ${isTsEditing || isTsInfo ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                         >
                           <Edit2 className="w-3 h-3" />
                         </button>
                         <button
                           onClick={() => setIsTsInfo(!isTsInfo)}
-                          className={`p-1 rounded-md transition-all ${isTsInfo ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 text-slate-400'} ${isTsEditing || isTsInfo ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                          className={`p-1 rounded-md transition-all ${isTsInfo ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500'} ${isTsEditing || isTsInfo ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                         >
                           <Info className="w-3 h-3" />
                         </button>
                       </div>
-                      <span className="text-xs font-mono font-medium text-slate-500">
+                      <span className="text-xs font-mono font-medium text-slate-500 dark:text-slate-400">
                         {tsConfig.enabled
                           ? <IpDisplay info={ifaceIPs([/^tailscale/])} fallback="Connecting…" />
                           : 'Disconnected'}
@@ -1095,7 +1138,7 @@ export default function App() {
                       setSavedTsConfig(next);
                       saveToServer({ tailscale: next });
                     }}
-                    className={`toggle-switch ${tsConfig.enabled ? 'bg-maroon' : 'bg-slate-200'}`}
+                    className={`toggle-switch ${tsConfig.enabled ? 'bg-maroon' : 'bg-slate-200 dark:bg-slate-600'}`}
                   >
                     <span className={`toggle-thumb ${tsConfig.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
@@ -1110,7 +1153,7 @@ export default function App() {
                       className="space-y-4 overflow-hidden"
                     >
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase">Pre-Auth Key</label>
+                        <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Pre-Auth Key</label>
                         <input 
                           type="password" 
                           className="input-field" 
@@ -1121,7 +1164,7 @@ export default function App() {
                       </div>
                       
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase">Server URL</label>
+                        <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Server URL</label>
                         <input 
                           type="text" 
                           className="input-field" 
@@ -1132,10 +1175,10 @@ export default function App() {
                       </div>
 
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-600">Exit Node</span>
+                        <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Exit Node</span>
                         <button 
                           onClick={() => setTsConfig({...tsConfig, exitNode: !tsConfig.exitNode})}
-                          className={`toggle-switch scale-75 ${tsConfig.exitNode ? 'bg-maroon' : 'bg-slate-200'}`}
+                          className={`toggle-switch scale-75 ${tsConfig.exitNode ? 'bg-maroon' : 'bg-slate-200 dark:bg-slate-600'}`}
                         >
                           <span className={`toggle-thumb ${tsConfig.exitNode ? 'translate-x-6' : 'translate-x-1'}`} />
                         </button>
@@ -1162,7 +1205,7 @@ export default function App() {
                       exit={{ opacity: 0, height: 0 }}
                       className="overflow-hidden"
                     >
-                      <div className="pt-3 border-t border-slate-100">
+                      <div className="pt-3 border-t border-slate-100 dark:border-slate-700">
                         <InterfaceDetails patterns={[/^tailscale/]} ifaces={ifaces} />
                       </div>
                     </motion.div>
@@ -1175,26 +1218,26 @@ export default function App() {
               {!savedWgConfig.blocked && <div className="card p-5 flex flex-col gap-4 group">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${hasIP(ifaceIPs([/^wg\d/])) ? 'bg-maroon/10' : 'bg-slate-100'}`}>
-                      <Lock className={`w-5 h-5 transition-colors ${hasIP(ifaceIPs([/^wg\d/])) ? 'text-maroon' : 'text-slate-500'}`} />
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${hasIP(ifaceIPs([/^wg\d/])) ? 'bg-maroon/10' : 'bg-slate-100 dark:bg-slate-700'}`}>
+                      <Lock className={`w-5 h-5 transition-colors ${hasIP(ifaceIPs([/^wg\d/])) ? 'text-maroon' : 'text-slate-500 dark:text-slate-400'}`} />
                     </div>
                     <div className="leading-tight">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-slate-800">WireGuard</h3>
+                        <h3 className="font-bold text-slate-800 dark:text-slate-200">WireGuard</h3>
                         <button
                           onClick={() => setIsWgEditing(!isWgEditing)}
-                          className={`p-1 rounded-md transition-all ${isWgEditing ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 text-slate-400'} ${isWgEditing || isWgInfo ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                          className={`p-1 rounded-md transition-all ${isWgEditing ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500'} ${isWgEditing || isWgInfo ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                         >
                           <Edit2 className="w-3 h-3" />
                         </button>
                         <button
                           onClick={() => setIsWgInfo(!isWgInfo)}
-                          className={`p-1 rounded-md transition-all ${isWgInfo ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 text-slate-400'} ${isWgEditing || isWgInfo ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                          className={`p-1 rounded-md transition-all ${isWgInfo ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500'} ${isWgEditing || isWgInfo ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                         >
                           <Info className="w-3 h-3" />
                         </button>
                       </div>
-                      <span className="text-xs font-mono font-medium text-slate-500">
+                      <span className="text-xs font-mono font-medium text-slate-500 dark:text-slate-400">
                         {wgConfig.enabled
                           ? <IpDisplay
                               info={ifaceIPs([/^wg\d/])}
@@ -1211,7 +1254,7 @@ export default function App() {
                       setSavedWgConfig(next);
                       saveToServer({ wireguard: next });
                     }}
-                    className={`toggle-switch ${wgConfig.enabled ? 'bg-maroon' : 'bg-slate-200'}`}
+                    className={`toggle-switch ${wgConfig.enabled ? 'bg-maroon' : 'bg-slate-200 dark:bg-slate-600'}`}
                   >
                     <span className={`toggle-thumb ${wgConfig.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
@@ -1226,7 +1269,7 @@ export default function App() {
                       className="space-y-3 overflow-hidden"
                     >
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase">Configuration</label>
+                        <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Configuration</label>
                         <textarea 
                           className="input-field font-mono text-[10px] h-32 resize-none"
                           placeholder="Paste WireGuard config here..."
@@ -1256,7 +1299,7 @@ export default function App() {
                       exit={{ opacity: 0, height: 0 }}
                       className="overflow-hidden"
                     >
-                      <div className="pt-3 border-t border-slate-100">
+                      <div className="pt-3 border-t border-slate-100 dark:border-slate-700">
                         <InterfaceDetails patterns={[/^wg\d/]} ifaces={ifaces} />
                       </div>
                     </motion.div>
@@ -1277,15 +1320,15 @@ export default function App() {
               {/* SSH */}
               <div className="card p-5 flex flex-col gap-4 group">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100">
-                    <Key className="w-5 h-5 text-slate-500" />
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-700">
+                    <Key className="w-5 h-5 text-slate-500 dark:text-slate-400" />
                   </div>
                   <div className="leading-tight">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-slate-800">SSH Keys</h3>
+                      <h3 className="font-bold text-slate-800 dark:text-slate-200">SSH Keys</h3>
                       <button
                         onClick={() => setIsSshEditing(!isSshEditing)}
-                        className={`p-1 rounded-md transition-all ${isSshEditing ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 text-slate-400'} ${isSshEditing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                        className={`p-1 rounded-md transition-all ${isSshEditing ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500'} ${isSshEditing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                       >
                         <Edit2 className="w-3 h-3" />
                       </button>
@@ -1308,16 +1351,16 @@ export default function App() {
                       {sshKeys.length > 0 && (
                         <div className="space-y-2">
                           {sshKeys.map(key => (
-                            <div key={key.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg border border-slate-100">
+                            <div key={key.id} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-700 rounded-lg border border-slate-100 dark:border-slate-600">
                               <div className="flex flex-col min-w-0">
-                                <span className="text-xs font-bold text-slate-600 truncate">{key.name}</span>
-                                <span className="text-[10px] font-mono text-slate-400 truncate">
+                                <span className="text-xs font-bold text-slate-600 dark:text-slate-300 truncate">{key.name}</span>
+                                <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 truncate">
                                   {key.publicKey.length > 48 ? key.publicKey.slice(0, 48) + '…' : key.publicKey}
                                 </span>
                               </div>
                               <button
                                 onClick={() => removeSshKey(key.id)}
-                                className="ml-2 p-1 rounded-md hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors shrink-0"
+                                className="ml-2 p-1 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 dark:text-slate-500 hover:text-red-500 transition-colors shrink-0"
                               >
                                 <Trash2 className="w-3 h-3" />
                               </button>
@@ -1327,8 +1370,8 @@ export default function App() {
                       )}
 
                       {/* Add new key */}
-                      <div className="space-y-2 pt-2 border-t border-slate-100">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase">Add Key</label>
+                      <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                        <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Add Key</label>
                         <input
                           type="text"
                           className="input-field"
@@ -1361,15 +1404,15 @@ export default function App() {
               {/* Firewall */}
               <div className="card p-5 flex flex-col gap-4 group">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100">
-                    <Shield className="w-5 h-5 text-slate-500" />
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-700">
+                    <Shield className="w-5 h-5 text-slate-500 dark:text-slate-400" />
                   </div>
                   <div className="leading-tight">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-slate-800">Firewall</h3>
+                      <h3 className="font-bold text-slate-800 dark:text-slate-200">Firewall</h3>
                       <button
                         onClick={() => setIsFirewallEditing(!isFirewallEditing)}
-                        className={`p-1 rounded-md transition-all ${isFirewallEditing ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 text-slate-400'} ${isFirewallEditing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                        className={`p-1 rounded-md transition-all ${isFirewallEditing ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500'} ${isFirewallEditing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                       >
                         <Edit2 className="w-3 h-3" />
                       </button>
@@ -1399,10 +1442,10 @@ export default function App() {
                         <motion.div
                           initial={{ opacity: 0, scale: 0.95 }}
                           animate={{ opacity: 1, scale: 1 }}
-                          className="flex items-start gap-2 rounded-lg bg-orange-50 border border-orange-200 px-3 py-2"
+                          className="flex items-start gap-2 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 px-3 py-2"
                         >
                           <AlertTriangle className="w-3.5 h-3.5 text-orange-500 mt-0.5 shrink-0" />
-                          <span className="text-xs text-orange-700 leading-snug">
+                          <span className="text-xs text-orange-700 dark:text-orange-400 leading-snug">
                             One or more services are blocked on all interfaces — you may lose access to the device.
                           </span>
                         </motion.div>
@@ -1412,13 +1455,13 @@ export default function App() {
                       <div className="grid grid-cols-4">
                         <div />
                         {(['usbip', 'ssh', 'web'] as const).map(app => (
-                          <div key={app} className="text-center text-[10px] font-bold text-slate-400 uppercase tracking-wide pb-1">{app}</div>
+                          <div key={app} className="text-center text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide pb-1">{app}</div>
                         ))}
                       </div>
                       {/* Matrix rows */}
                       {(['eth', 'wifi', 'vpn'] as const).map((iface, ri) => (
-                        <div key={iface} className={`grid grid-cols-4 items-center py-1 ${ri < 2 ? 'border-b border-slate-100' : ''}`}>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">{iface}</span>
+                        <div key={iface} className={`grid grid-cols-4 items-center py-1 ${ri < 2 ? 'border-b border-slate-100 dark:border-slate-700' : ''}`}>
+                          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide">{iface}</span>
                           {(['usbip', 'ssh', 'web'] as const).map(app => {
                             const on = firewallConfig[app][iface];
                             return (
@@ -1428,7 +1471,7 @@ export default function App() {
                                     ...prev,
                                     [app]: { ...prev[app], [iface]: !on },
                                   }))}
-                                  className={`w-6 h-6 rounded flex items-center justify-center transition-colors ${on ? 'bg-maroon text-white' : 'bg-slate-100 hover:bg-slate-200 text-transparent'}`}
+                                  className={`w-6 h-6 rounded flex items-center justify-center transition-colors ${on ? 'bg-maroon text-white' : 'bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-transparent'}`}
                                 >
                                   <Check className="w-3.5 h-3.5" />
                                 </button>
@@ -1456,15 +1499,15 @@ export default function App() {
               {/* System Settings */}
               <div className="card p-5 flex flex-col gap-4 group">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100">
-                    <Monitor className="w-5 h-5 text-slate-500" />
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-700">
+                    <Monitor className="w-5 h-5 text-slate-500 dark:text-slate-400" />
                   </div>
                   <div className="leading-tight">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-slate-800">Settings</h3>
+                      <h3 className="font-bold text-slate-800 dark:text-slate-200">Settings</h3>
                       <button
                         onClick={() => setIsSystemEditing(!isSystemEditing)}
-                        className={`p-1 rounded-md transition-all ${isSystemEditing ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 text-slate-400'} ${isSystemEditing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                        className={`p-1 rounded-md transition-all ${isSystemEditing ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500'} ${isSystemEditing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                       >
                         <Edit2 className="w-3 h-3" />
                       </button>
@@ -1476,7 +1519,7 @@ export default function App() {
                   {passwordRequired && (
                     <button
                       onClick={handleLogout}
-                      className="ml-auto p-1.5 rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+                      className="ml-auto p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
                       title="Logout"
                     >
                       <LogOut className="w-4 h-4" />
@@ -1493,7 +1536,7 @@ export default function App() {
                       className="space-y-4 overflow-hidden"
                     >
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase">Hostname</label>
+                        <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Hostname</label>
                         <input
                           type="text"
                           className="input-field"
@@ -1503,8 +1546,8 @@ export default function App() {
                         />
                       </div>
 
-                      <div className="space-y-1 pt-2 border-t border-slate-100">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase">
+                      <div className="space-y-1 pt-2 border-t border-slate-100 dark:border-slate-700">
+                        <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">
                           {hasPassword ? 'Change Password' : 'Set Password'}
                         </label>
                         <input
@@ -1542,7 +1585,7 @@ export default function App() {
                       {hasPassword && (
                         <button
                           onClick={handleClearPassword}
-                          className="w-full text-xs py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-red-50 hover:border-red-200 hover:text-red-500 transition-colors"
+                          className="w-full text-xs py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-200 dark:hover:border-red-700 hover:text-red-500 transition-colors"
                         >
                           Remove Password
                         </button>
@@ -1557,12 +1600,12 @@ export default function App() {
         </aside>
       </main>
 
-      <footer className="mt-auto pt-8 pb-4 border-t border-slate-200 flex justify-between items-center">
-        <div className="flex items-center gap-2 text-slate-400">
+      <footer className="mt-auto pt-8 pb-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
+        <div className="flex items-center gap-2 text-slate-400 dark:text-slate-500">
           <Cpu className="w-4 h-4" />
           <span className="text-xs font-medium">Firmware: {appVersion}</span>
         </div>
-        <div className="flex items-center gap-5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+        <div className="flex items-center gap-5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
           <span>CPU: {metrics.cpu}%</span>
           <span>RAM: {metrics.ram}%</span>
           <span>Uptime: {metrics.uptime}</span>
