@@ -1,18 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Usb, 
-  Power, 
-  Network, 
-  ShieldCheck, 
-  Wifi, 
-  Globe, 
-  Cpu, 
-  Settings2, 
+import {
+  Usb,
+  Power,
+  Network,
+  ShieldCheck,
+  Wifi,
+  Globe,
+  Cpu,
+  Settings2,
   Activity,
   Lock,
   Server,
   Edit2,
-  Info
+  Info,
+  Key,
+  Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
@@ -24,7 +26,8 @@ import {
   WiFiSecurity,
   WifiNetwork,
   VPNConfig,
-  UsbipDevice
+  UsbipDevice,
+  SSHKey
 } from './types';
 
 const INITIAL_PORTS: HubPort[] = [
@@ -234,18 +237,25 @@ export default function App() {
   const [tsConfig, setTsConfig] = useState<VPNConfig>({ ...savedTsConfig });
   const [isTsEditing, setIsTsEditing] = useState(false);
 
+  const [sshKeys, setSshKeys] = useState<SSHKey[]>([]);
+  const [isSshEditing, setIsSshEditing] = useState(false);
+  const [newKeyName, setNewKeyName] = useState('');
+  const [newKeyValue, setNewKeyValue] = useState('');
+
   const saveToServer = (overrides: {
     ports?: HubPort[];
     ethernet?: EthernetConfig;
     wifi?: WiFiConfig;
     wireguard?: VPNConfig;
     tailscale?: VPNConfig;
+    ssh?: SSHKey[];
   } = {}) => {
     const eth = overrides.ethernet ?? savedEthConfig;
     const wifi = overrides.wifi ?? savedWifiConfig;
     const wg = overrides.wireguard ?? savedWgConfig;
     const ts = overrides.tailscale ?? savedTsConfig;
     const portsList = overrides.ports ?? ports;
+    const sshKeysList = overrides.ssh ?? sshKeys;
     fetch('/api/config', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -255,6 +265,7 @@ export default function App() {
         wifi: wifi,
         wireguard: { blocked: wg.blocked, enabled: wg.enabled, config: wg.config },
         tailscale: { blocked: ts.blocked, enabled: ts.enabled, preauthkey: ts.preauthkey, exitNode: ts.exitNode, serverUrl: ts.serverUrl },
+        ssh: { keys: sshKeysList },
       }),
     }).catch(console.error);
   };
@@ -288,6 +299,9 @@ export default function App() {
             const saved = data.ports.find((sp: { id: number }) => sp.id === p.id);
             return saved ? { ...p, power: saved.power } : p;
           }));
+        }
+        if (data.ssh?.keys) {
+          setSshKeys(data.ssh.keys);
         }
       })
       .catch(console.error);
@@ -398,6 +412,26 @@ export default function App() {
     setSavedTsConfig(next);
     setIsTsEditing(false);
     saveToServer({ tailscale: next });
+  };
+
+  const addSshKey = () => {
+    if (!newKeyValue.trim()) return;
+    const key: SSHKey = {
+      id: Date.now().toString(),
+      name: newKeyName.trim() || 'Key',
+      publicKey: newKeyValue.trim(),
+    };
+    const next = [...sshKeys, key];
+    setSshKeys(next);
+    saveToServer({ ssh: next });
+    setNewKeyName('');
+    setNewKeyValue('');
+  };
+
+  const removeSshKey = (id: string) => {
+    const next = sshKeys.filter(k => k.id !== id);
+    setSshKeys(next);
+    saveToServer({ ssh: next });
   };
 
   const togglePortPower = (id: number) => {
@@ -602,13 +636,23 @@ export default function App() {
                             />
                           </div>
                           <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase">Subnet Mask</label>
+                            <input
+                              type="text"
+                              className="input-field"
+                              value={ethConfig.mask || ''}
+                              onChange={(e) => setEthConfig({...ethConfig, mask: e.target.value})}
+                              placeholder="255.255.255.0"
+                            />
+                          </div>
+                          <div className="space-y-1">
                             <label className="text-[10px] font-bold text-slate-400 uppercase">Gateway</label>
-                            <input 
-                              type="text" 
-                              className="input-field" 
-                              value={ethConfig.gateway || ''} 
+                            <input
+                              type="text"
+                              className="input-field"
+                              value={ethConfig.gateway || ''}
                               onChange={(e) => setEthConfig({...ethConfig, gateway: e.target.value})}
-                              placeholder="192.168.1.1" 
+                              placeholder="192.168.1.1"
                             />
                           </div>
                         </div>
@@ -1020,6 +1064,100 @@ export default function App() {
                   )}
                 </AnimatePresence>
               </div>}
+            </div>
+          </section>
+
+          {/* Block 4: System */}
+          <section className="flex flex-col gap-4">
+            <h2 className="text-lg font-bold flex items-center gap-2">
+              <Settings2 className="w-5 h-5 text-maroon" />
+              System
+            </h2>
+
+            <div className="flex flex-col gap-4">
+              {/* SSH */}
+              <div className="card p-5 flex flex-col gap-4 group">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100">
+                    <Key className="w-5 h-5 text-slate-500" />
+                  </div>
+                  <div className="leading-tight">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-slate-800">SSH Keys</h3>
+                      <button
+                        onClick={() => setIsSshEditing(!isSshEditing)}
+                        className={`p-1 rounded-md transition-all ${isSshEditing ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 text-slate-400'} ${isSshEditing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                      >
+                        <Edit2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <span className="text-xs font-mono font-medium text-slate-500">
+                      {sshKeys.length} key{sshKeys.length !== 1 ? 's' : ''} authorized
+                    </span>
+                  </div>
+                </div>
+
+                <AnimatePresence>
+                  {isSshEditing && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="space-y-4 overflow-hidden"
+                    >
+                      {/* Key list */}
+                      {sshKeys.length > 0 && (
+                        <div className="space-y-2">
+                          {sshKeys.map(key => (
+                            <div key={key.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg border border-slate-100">
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-xs font-bold text-slate-600 truncate">{key.name}</span>
+                                <span className="text-[10px] font-mono text-slate-400 truncate">
+                                  {key.publicKey.length > 48 ? key.publicKey.slice(0, 48) + '…' : key.publicKey}
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => removeSshKey(key.id)}
+                                className="ml-2 p-1 rounded-md hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors shrink-0"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Add new key */}
+                      <div className="space-y-2 pt-2 border-t border-slate-100">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Add Key</label>
+                        <input
+                          type="text"
+                          className="input-field"
+                          placeholder="Key name (e.g. laptop)"
+                          value={newKeyName}
+                          onChange={e => setNewKeyName(e.target.value)}
+                        />
+                        <textarea
+                          className="input-field font-mono text-[10px] h-20 resize-none"
+                          placeholder="ssh-ed25519 AAAA... user@host"
+                          value={newKeyValue}
+                          onChange={e => setNewKeyValue(e.target.value)}
+                        />
+                        {newKeyValue.trim() && (
+                          <motion.button
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            onClick={addSshKey}
+                            className="btn-primary w-full text-xs py-1.5 shadow-md shadow-maroon/10"
+                          >
+                            Add Key
+                          </motion.button>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </section>
 

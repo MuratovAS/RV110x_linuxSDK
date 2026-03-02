@@ -1,0 +1,43 @@
+#!/bin/sh
+#
+# ssh-userdata  Redirect /root/.ssh/authorized_keys to userdata
+#               so SSH keys persist across firmware updates.
+#
+
+USERDATA_DIR=/userdata/ssh
+USERDATA_KEYS=$USERDATA_DIR/authorized_keys
+SSH_DIR=/root/.ssh
+SSH_KEYS=$SSH_DIR/authorized_keys
+
+start() {
+	mkdir -p "$USERDATA_DIR"
+	chmod 700 "$USERDATA_DIR"
+
+	# Create empty authorized_keys on first boot after flashing
+	if [ ! -f "$USERDATA_KEYS" ]; then
+		touch "$USERDATA_KEYS"
+		chmod 600 "$USERDATA_KEYS"
+	fi
+
+	mkdir -p "$SSH_DIR"
+	chmod 700 "$SSH_DIR"
+
+	# Replace /root/.ssh/authorized_keys with symlink to userdata
+	if [ ! -L "$SSH_KEYS" ]; then
+		rm -f "$SSH_KEYS"
+		ln -sf "$USERDATA_KEYS" "$SSH_KEYS"
+	fi
+}
+
+case "$1" in
+  start)
+	start
+	;;
+  stop|restart|reload)
+	;;
+  *)
+	echo "Usage: $0 {start|stop|restart}"
+	exit 1
+esac
+
+exit 0

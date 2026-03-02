@@ -64,3 +64,9 @@ export interface VPNConfig {
   exitNode?: boolean;
   serverUrl?: string;
 }
+
+export interface SSHKey {
+  id: string;
+  name: string;
+  publicKey: string;
+}

@@ -47,12 +47,23 @@ type TailscaleCfg struct {
 	ServerURL  string `json:"serverUrl,omitempty"`
 }
 
+type SSHKey struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	PublicKey string `json:"publicKey"`
+}
+
+type SSHCfg struct {
+	Keys []SSHKey `json:"keys"`
+}
+
 type AppConfig struct {
 	Ports     []PortState  `json:"ports"`
 	Ethernet  EthernetCfg  `json:"ethernet"`
 	WiFi      WiFiCfg      `json:"wifi"`
 	WireGuard WireGuardCfg `json:"wireguard"`
 	Tailscale TailscaleCfg `json:"tailscale"`
+	SSH       SSHCfg       `json:"ssh"`
 }
 
 func defaultConfig() AppConfig {
@@ -224,6 +235,23 @@ func processWGConfig(raw string, enabled bool) string {
 	return strings.Join(out, "\n")
 }
 
+const authorizedKeysPath = "/root/.ssh/authorized_keys"
+
+func applySSHKeys(ssh SSHCfg) {
+	var sb strings.Builder
+	for _, key := range ssh.Keys {
+		sb.WriteString(strings.TrimSpace(key.PublicKey))
+		sb.WriteString("\n")
+	}
+	if err := os.MkdirAll("/root/.ssh", 0700); err != nil {
+		pushCmdError("ssh: mkdir .ssh: " + err.Error())
+		return
+	}
+	if err := os.WriteFile(authorizedKeysPath, []byte(sb.String()), 0600); err != nil {
+		pushCmdError("ssh: write authorized_keys: " + err.Error())
+	}
+}
+
 func saveWGConfig(raw string, enabled bool) error {
 	if err := os.MkdirAll("/etc/wireguard", 0700); err != nil {
 		return err
@@ -354,6 +382,7 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 		tsCfg := newCfg.Tailscale
 		wgCfg := newCfg.WireGuard
 		newPorts := newCfg.Ports
+		sshCfg := newCfg.SSH
 		cfg = newCfg
 		err := writeConfig(cfgPath)
 		cfgMu.Unlock()
@@ -371,6 +400,7 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 		if wgChanged {
 			go applyWireGuard(oldWg, wgCfg)
 		}
+		go applySSHKeys(sshCfg)
 		w.WriteHeader(http.StatusNoContent)
 
 	default:

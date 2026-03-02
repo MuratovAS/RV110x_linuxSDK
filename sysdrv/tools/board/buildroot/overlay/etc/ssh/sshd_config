@@ -54,6 +54,7 @@ AuthorizedKeysFile	.ssh/authorized_keys
 #IgnoreRhosts yes
 
 # To disable tunneled clear text passwords, change to no here!
+PasswordAuthentication no
 #PasswordAuthentication yes
 #PermitEmptyPasswords no
 
@@ -103,7 +104,7 @@ AuthorizedKeysFile	.ssh/authorized_keys
 #VersionAddendum none
 
 # no default banner path
-#Banner none
+Banner /etc/ssh/banner
 
 # override default of no subsystems
 Subsystem	sftp	/usr/libexec/sftp-server
