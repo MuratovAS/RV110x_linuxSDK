@@ -1,0 +1,49 @@
+#!/bin/sh
+#
+# ip6tables-userdata  Redirect /etc/ip6tables.conf to userdata
+#                    so IPv6 firewall rules persist across firmware updates.
+#
+
+USERDATA_DIR=/userdata/ip6tables
+USERDATA_CFG=$USERDATA_DIR/ip6tables.conf
+ETC_CFG=/etc/ip6tables.conf
+
+start() {
+	mkdir -p "$USERDATA_DIR"
+
+	# Copy default config to userdata on first boot after flashing
+	if [ ! -f "$USERDATA_CFG" ]; then
+		if [ -f "$ETC_CFG" ] && [ ! -L "$ETC_CFG" ]; then
+			cp "$ETC_CFG" "$USERDATA_CFG"
+		else
+			# No default exists — write a permissive ruleset so the
+			# system remains accessible until uipm applies its config.
+			cat > "$USERDATA_CFG" <<'EOF'
+*filter
+:INPUT ACCEPT [0:0]
+:FORWARD ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+COMMIT
+EOF
+		fi
+	fi
+
+	# Replace /etc/ip6tables.conf with symlink to userdata
+	if [ ! -L "$ETC_CFG" ]; then
+		rm -f "$ETC_CFG"
+		ln -sf "$USERDATA_CFG" "$ETC_CFG"
+	fi
+}
+
+case "$1" in
+  start)
+	start
+	;;
+  stop|restart|reload)
+	;;
+  *)
+	echo "Usage: $0 {start|stop|restart}"
+	exit 1
+esac
+
+exit 0

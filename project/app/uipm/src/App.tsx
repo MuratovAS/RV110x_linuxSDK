@@ -1374,6 +1374,21 @@ export default function App() {
                       exit={{ opacity: 0, height: 0 }}
                       className="space-y-3 overflow-hidden"
                     >
+                      {(['usbip', 'ssh', 'web'] as const).some(
+                        app => !firewallConfig[app].eth && !firewallConfig[app].wifi && !firewallConfig[app].vpn
+                      ) && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="flex items-start gap-2 rounded-lg bg-orange-50 border border-orange-200 px-3 py-2"
+                        >
+                          <AlertTriangle className="w-3.5 h-3.5 text-orange-500 mt-0.5 shrink-0" />
+                          <span className="text-xs text-orange-700 leading-snug">
+                            One or more services are blocked on all interfaces — you may lose access to the device.
+                          </span>
+                        </motion.div>
+                      )}
+
                       {/* Header row */}
                       <div className="grid grid-cols-4">
                         <div />
@@ -1403,21 +1418,6 @@ export default function App() {
                           })}
                         </div>
                       ))}
-
-                      {(['usbip', 'ssh', 'web'] as const).some(
-                        app => !firewallConfig[app].eth && !firewallConfig[app].wifi && !firewallConfig[app].vpn
-                      ) && (
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0.95 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          className="flex items-start gap-2 rounded-lg bg-orange-50 border border-orange-200 px-3 py-2"
-                        >
-                          <AlertTriangle className="w-3.5 h-3.5 text-orange-500 mt-0.5 shrink-0" />
-                          <span className="text-xs text-orange-700 leading-snug">
-                            One or more services are blocked on all interfaces — you may lose access to the device.
-                          </span>
-                        </motion.div>
-                      )}
 
                       {isFwChanged && (
                         <motion.button

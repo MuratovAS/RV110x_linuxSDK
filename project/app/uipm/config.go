@@ -325,12 +325,16 @@ func applySSHKeys(ssh SSHCfg) {
 	}
 }
 
-const iptablesConfPath = "/etc/iptables.conf"
+const (
+	iptablesConfPath  = "/etc/iptables.conf"
+	ip6tablesConfPath = "/etc/ip6tables.conf"
+)
 
-// buildIPTablesRules generates an iptables-restore compatible ruleset from fw.
+// buildFirewallRules generates an iptables-restore compatible ruleset from fw.
 // Default policy: DROP all INPUT; allow loopback, established, and the
 // specific app×interface combinations that are enabled in the matrix.
-func buildIPTablesRules(fw FirewallCfg) string {
+// If extraRules is non-empty, those lines are inserted after the base allow rules.
+func buildFirewallRules(fw FirewallCfg, extraRules []string) string {
 	ethIface := findEthernetIface()
 	wifiIface := findWirelessIface()
 
@@ -351,6 +355,9 @@ func buildIPTablesRules(fw FirewallCfg) string {
 	sb.WriteString(":OUTPUT ACCEPT [0:0]\n")
 	sb.WriteString("-A INPUT -i lo -j ACCEPT\n")
 	sb.WriteString("-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT\n")
+	for _, r := range extraRules {
+		sb.WriteString(r + "\n")
+	}
 
 	addRules := func(iface string, ports []int) {
 		for _, port := range ports {
@@ -376,14 +383,20 @@ func buildIPTablesRules(fw FirewallCfg) string {
 	return sb.String()
 }
 
-// applyFirewall writes /etc/iptables.conf and restarts the iptables init.d service.
+// applyFirewall writes iptables.conf + ip6tables.conf and restarts both services.
 func applyFirewall(fw FirewallCfg) {
-	rules := buildIPTablesRules(fw)
-	if err := os.WriteFile(iptablesConfPath, []byte(rules), 0644); err != nil {
+	if err := os.WriteFile(iptablesConfPath, []byte(buildFirewallRules(fw, nil)), 0644); err != nil {
 		pushCmdError("firewall: write iptables.conf: " + err.Error())
 		return
 	}
 	runCmd("/etc/init.d/S35iptables", "restart") //nolint:errcheck
+
+	ip6Rules := []string{"-A INPUT -p ipv6-icmp -j ACCEPT"}
+	if err := os.WriteFile(ip6tablesConfPath, []byte(buildFirewallRules(fw, ip6Rules)), 0644); err != nil {
+		pushCmdError("firewall: write ip6tables.conf: " + err.Error())
+		return
+	}
+	runCmd("/etc/init.d/S36ip6tables", "restart") //nolint:errcheck
 }
 
 func saveWGConfig(raw string, enabled bool) error {
