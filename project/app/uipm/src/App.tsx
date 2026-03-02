@@ -82,33 +82,52 @@ const DeviceTree: React.FC<{ device: USBDevice; depth?: number }> = ({ device, d
 };
 
 const CombinedNetworkChart = ({ history }: { history: {rx: number, tx: number}[] }) => {
+  const slideRef = useRef<HTMLDivElement>(null);
+  const N = history.length;
+
+  useEffect(() => {
+    const el = slideRef.current;
+    if (!el) return;
+    // Instant reset to position 0 (no transition)
+    el.style.transition = 'none';
+    el.style.transform = 'translateX(0%)';
+    // Force reflow so browser applies the reset before starting animation
+    void el.offsetWidth;
+    // Slide left by exactly 1 point width over 1s (linear matches data interval)
+    el.style.transition = 'transform 1s linear';
+    el.style.transform = `translateX(-${100 / N}%)`;
+  }, [history, N]);
+
   return (
-    <div className="w-full h-full" style={{ 
-      maskImage: 'linear-gradient(to right, transparent 0%, transparent 50%, rgba(0, 0, 0, 0.5) 100%)', 
-      WebkitMaskImage: 'linear-gradient(to right, transparent 0%, transparent 50%, rgba(0, 0, 0, 0.5) 100%)' 
+    <div className="w-full h-full overflow-hidden" style={{
+      maskImage: 'linear-gradient(to right, transparent 0%, transparent 50%, rgba(0, 0, 0, 0.5) 100%)',
+      WebkitMaskImage: 'linear-gradient(to right, transparent 0%, transparent 50%, rgba(0, 0, 0, 0.5) 100%)'
     }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={history} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-          <Area 
-            type="monotone" 
-            dataKey="rx" 
-            stroke="#94a3b8" 
-            fill="#94a3b8" 
-            fillOpacity={0.1} 
-            strokeWidth={1}
-            isAnimationActive={false}
-          />
-          <Area 
-            type="monotone" 
-            dataKey="tx" 
-            stroke="#ea580c"
-            fill="#ea580c"
-            fillOpacity={0.15} 
-            strokeWidth={1}
-            isAnimationActive={false}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
+      {/* Wider by 1 extra point so there's room to slide without clipping */}
+      <div ref={slideRef} style={{ width: `${(N + 1) / N * 100}%`, height: '100%' }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={history} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+            <Area
+              type="monotone"
+              dataKey="rx"
+              stroke="#94a3b8"
+              fill="#94a3b8"
+              fillOpacity={0.1}
+              strokeWidth={1}
+              isAnimationActive={false}
+            />
+            <Area
+              type="monotone"
+              dataKey="tx"
+              stroke="#ea580c"
+              fill="#ea580c"
+              fillOpacity={0.15}
+              strokeWidth={1}
+              isAnimationActive={false}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 };
