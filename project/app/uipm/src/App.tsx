@@ -14,7 +14,9 @@ import {
   Edit2,
   Info,
   Key,
-  Trash2
+  Trash2,
+  LogOut,
+  Monitor
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
@@ -27,8 +29,17 @@ import {
   WifiNetwork,
   VPNConfig,
   UsbipDevice,
-  SSHKey
+  SSHKey,
+  SystemConfig
 } from './types';
+
+const fmtSpeed = (mb: number): string => {
+  if (mb < 0.1) {
+    const kb = mb * 1024;
+    return `${kb < 10 ? kb.toFixed(2) : kb.toFixed(1)} KB`;
+  }
+  return `${mb < 10 ? mb.toFixed(2) : mb.toFixed(1)} MB`;
+};
 
 const INITIAL_PORTS: HubPort[] = [
   { id: 1, power: true, devices: [] },
@@ -242,6 +253,64 @@ export default function App() {
   const [newKeyName, setNewKeyName] = useState('');
   const [newKeyValue, setNewKeyValue] = useState('');
 
+  // Auth state
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [passwordRequired, setPasswordRequired] = useState(false);
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  // System settings state
+  const [hostname, setHostname] = useState('');
+  const [savedHostname, setSavedHostname] = useState('');
+  const [isSystemEditing, setIsSystemEditing] = useState(false);
+  const [hasPassword, setHasPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+
+  // Check auth status on mount
+  useEffect(() => {
+    fetch('/api/auth/status')
+      .then(r => r.json())
+      .then((data: { passwordRequired: boolean; authenticated: boolean }) => {
+        setPasswordRequired(data.passwordRequired);
+        setHasPassword(data.passwordRequired);
+        setIsAuthenticated(data.authenticated);
+      })
+      .catch(() => setIsAuthenticated(true));
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginLoading(true);
+    setLoginError('');
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: loginPassword }),
+      });
+      if (res.status === 401) {
+        setLoginError('Invalid password');
+      } else {
+        setIsAuthenticated(true);
+        setLoginPassword('');
+      }
+    } catch {
+      setLoginError('Connection error');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await fetch('/api/logout', { method: 'POST' }).catch(() => {});
+    setIsAuthenticated(false);
+    setPasswordRequired(true);
+    setLoginPassword('');
+  };
+
   const saveToServer = (overrides: {
     ports?: HubPort[];
     ethernet?: EthernetConfig;
@@ -249,6 +318,7 @@ export default function App() {
     wireguard?: VPNConfig;
     tailscale?: VPNConfig;
     ssh?: SSHKey[];
+    system?: SystemConfig;
   } = {}) => {
     const eth = overrides.ethernet ?? savedEthConfig;
     const wifi = overrides.wifi ?? savedWifiConfig;
@@ -256,6 +326,7 @@ export default function App() {
     const ts = overrides.tailscale ?? savedTsConfig;
     const portsList = overrides.ports ?? ports;
     const sshKeysList = overrides.ssh ?? sshKeys;
+    const sys: SystemConfig = overrides.system ?? { hostname: savedHostname };
     fetch('/api/config', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -266,6 +337,7 @@ export default function App() {
         wireguard: { blocked: wg.blocked, enabled: wg.enabled, config: wg.config },
         tailscale: { blocked: ts.blocked, enabled: ts.enabled, preauthkey: ts.preauthkey, exitNode: ts.exitNode, serverUrl: ts.serverUrl },
         ssh: { keys: sshKeysList },
+        system: sys,
       }),
     }).catch(console.error);
   };
@@ -303,9 +375,13 @@ export default function App() {
         if (data.ssh?.keys) {
           setSshKeys(data.ssh.keys);
         }
+        if (data.system?.hostname) {
+          setSavedHostname(data.system.hostname);
+          setHostname(data.system.hostname);
+        }
       })
       .catch(console.error);
-  }, []);
+  }, [isAuthenticated]);
 
   React.useEffect(() => {
     fetch('/api/version')
@@ -414,6 +490,31 @@ export default function App() {
     saveToServer({ tailscale: next });
   };
 
+  const handleApplySystem = () => {
+    if (newPassword && newPassword !== confirmPassword) {
+      setPasswordError('Passwords do not match');
+      return;
+    }
+    setPasswordError('');
+    const sys: SystemConfig = { hostname };
+    if (newPassword) {
+      sys.password = newPassword;
+    }
+    setSavedHostname(hostname);
+    setIsSystemEditing(false);
+    setNewPassword('');
+    setConfirmPassword('');
+    if (newPassword) setHasPassword(true);
+    saveToServer({ system: sys });
+  };
+
+  const handleClearPassword = () => {
+    const sys: SystemConfig = { hostname: savedHostname, clearPassword: true };
+    setHasPassword(false);
+    setPasswordRequired(false);
+    saveToServer({ system: sys });
+  };
+
   const addSshKey = () => {
     if (!newKeyValue.trim()) return;
     const key: SSHKey = {
@@ -442,6 +543,57 @@ export default function App() {
     });
   };
 
+  // Loading auth state
+  if (isAuthenticated === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="w-5 h-5 border-2 border-maroon border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // Login screen
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+        <div className="w-full max-w-sm">
+          <div className="card p-8 flex flex-col gap-6">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-14 h-14 rounded-2xl bg-maroon/10 flex items-center justify-center">
+                <Lock className="w-7 h-7 text-maroon" />
+              </div>
+              <div className="text-center">
+                <h1 className="text-xl font-bold text-slate-800">USBIP Hub Manager</h1>
+                <p className="text-sm text-slate-500 mt-1">Enter password to sign in</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleLogin} className="flex flex-col gap-3">
+              <input
+                type="password"
+                className="input-field"
+                placeholder="Password"
+                value={loginPassword}
+                onChange={e => setLoginPassword(e.target.value)}
+                autoFocus
+              />
+              {loginError && (
+                <p className="text-xs text-red-500 font-medium">{loginError}</p>
+              )}
+              <button
+                type="submit"
+                disabled={loginLoading}
+                className="btn-primary py-2.5 text-sm font-semibold shadow-md shadow-maroon/10 disabled:opacity-50"
+              >
+                {loginLoading ? 'Signing in…' : 'Sign In'}
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col max-w-6xl mx-auto p-4 md:p-8 gap-8">
       {/* Network Status Header */}
@@ -464,11 +616,11 @@ export default function App() {
           <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-tight">
             <div className="flex flex-col items-end">
               <span className="text-slate-400 text-[8px]">Receive</span>
-              <span className="text-slate-600 font-mono">{networkHistory[networkHistory.length - 1].rx.toFixed(1)} MB</span>
+              <span className="text-slate-600 font-mono">{fmtSpeed(networkHistory[networkHistory.length - 1].rx)}</span>
             </div>
             <div className="flex flex-col items-end">
               <span className="text-maroon text-[8px]">Transmit</span>
-              <span className="text-slate-600 font-mono">{networkHistory[networkHistory.length - 1].tx.toFixed(1)} MB</span>
+              <span className="text-slate-600 font-mono">{fmtSpeed(networkHistory[networkHistory.length - 1].tx)}</span>
             </div>
           </div>
         </div>
@@ -1154,6 +1306,105 @@ export default function App() {
                           </motion.button>
                         )}
                       </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* System Settings */}
+              <div className="card p-5 flex flex-col gap-4 group">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100">
+                    <Monitor className="w-5 h-5 text-slate-500" />
+                  </div>
+                  <div className="leading-tight">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-slate-800">Settings</h3>
+                      <button
+                        onClick={() => setIsSystemEditing(!isSystemEditing)}
+                        className={`p-1 rounded-md transition-all ${isSystemEditing ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 text-slate-400'} ${isSystemEditing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                      >
+                        <Edit2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <span className="text-xs font-mono font-medium text-slate-500">
+                      {savedHostname || '—'}
+                    </span>
+                  </div>
+                  {passwordRequired && (
+                    <button
+                      onClick={handleLogout}
+                      className="ml-auto p-1.5 rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+                      title="Logout"
+                    >
+                      <LogOut className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                <AnimatePresence>
+                  {isSystemEditing && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="space-y-4 overflow-hidden"
+                    >
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Hostname</label>
+                        <input
+                          type="text"
+                          className="input-field"
+                          value={hostname}
+                          onChange={e => setHostname(e.target.value)}
+                          placeholder="usbip-hub"
+                        />
+                      </div>
+
+                      <div className="space-y-1 pt-2 border-t border-slate-100">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">
+                          {hasPassword ? 'Change Password' : 'Set Password'}
+                        </label>
+                        <input
+                          type="password"
+                          className="input-field"
+                          placeholder="New password"
+                          value={newPassword}
+                          onChange={e => setNewPassword(e.target.value)}
+                        />
+                        {newPassword && (
+                          <input
+                            type="password"
+                            className="input-field"
+                            placeholder="Confirm password"
+                            value={confirmPassword}
+                            onChange={e => setConfirmPassword(e.target.value)}
+                          />
+                        )}
+                        {passwordError && (
+                          <p className="text-xs text-red-500 font-medium">{passwordError}</p>
+                        )}
+                      </div>
+
+                      {(hostname !== savedHostname || newPassword) && (
+                        <motion.button
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          onClick={handleApplySystem}
+                          className="btn-primary w-full text-xs py-1.5 shadow-md shadow-maroon/10"
+                        >
+                          Apply Changes
+                        </motion.button>
+                      )}
+
+                      {hasPassword && (
+                        <button
+                          onClick={handleClearPassword}
+                          className="w-full text-xs py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-red-50 hover:border-red-200 hover:text-red-500 transition-colors"
+                        >
+                          Remove Password
+                        </button>
+                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>

@@ -8,7 +8,34 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
+
+// SystemCfg holds system-level settings persisted to config.json.
+type SystemCfg struct {
+	Hostname     string `json:"hostname,omitempty"`
+	PasswordHash string `json:"passwordHash,omitempty"`
+	PasswordSalt string `json:"passwordSalt,omitempty"`
+}
+
+// systemPutReq is the transient shape sent by the frontend for system settings.
+// It is never stored to disk.
+type systemPutReq struct {
+	Hostname      string `json:"hostname"`
+	Password      string `json:"password"`
+	ClearPassword bool   `json:"clearPassword"`
+}
+
+// configPutReq mirrors AppConfig but uses systemPutReq for the system field.
+type configPutReq struct {
+	Ports     []PortState   `json:"ports"`
+	Ethernet  EthernetCfg   `json:"ethernet"`
+	WiFi      WiFiCfg       `json:"wifi"`
+	WireGuard WireGuardCfg  `json:"wireguard"`
+	Tailscale TailscaleCfg  `json:"tailscale"`
+	SSH       SSHCfg        `json:"ssh"`
+	System    systemPutReq  `json:"system"`
+}
 
 type PortState struct {
 	ID    int  `json:"id"`
@@ -64,6 +91,7 @@ type AppConfig struct {
 	WireGuard WireGuardCfg `json:"wireguard"`
 	Tailscale TailscaleCfg `json:"tailscale"`
 	SSH       SSHCfg       `json:"ssh"`
+	System    SystemCfg    `json:"system"`
 }
 
 func defaultConfig() AppConfig {
@@ -91,12 +119,39 @@ func loadConfig(path string) error {
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		cfg = defaultConfig()
+		seedHostname()
 		return writeConfig(path)
 	}
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(data, &cfg)
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return err
+	}
+	seedHostname()
+	return nil
+}
+
+// seedHostname reads /etc/hostname when no hostname is stored in config yet.
+func seedHostname() {
+	if cfg.System.Hostname != "" {
+		return
+	}
+	if data, err := os.ReadFile("/etc/hostname"); err == nil {
+		cfg.System.Hostname = strings.TrimSpace(string(data))
+	}
+}
+
+// applyHostname writes /etc/hostname and runs the hostname(1) command.
+func applyHostname(hostname string) {
+	if hostname == "" {
+		return
+	}
+	if err := os.WriteFile("/etc/hostname", []byte(hostname+"\n"), 0644); err != nil {
+		pushCmdError("system: write hostname: " + err.Error())
+		return
+	}
+	runCmd("hostname", hostname) //nolint:errcheck
 }
 
 func writeConfig(path string) error {
@@ -350,12 +405,15 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 		if out.WireGuard.Config != "" {
 			out.WireGuard.Config = "***"
 		}
+		// Never expose credentials to the client
+		out.System.PasswordHash = ""
+		out.System.PasswordSalt = ""
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(out)
 
 	case http.MethodPut:
-		var newCfg AppConfig
-		if err := json.NewDecoder(r.Body).Decode(&newCfg); err != nil {
+		var req configPutReq
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "invalid json", http.StatusBadRequest)
 			return
 		}
@@ -365,42 +423,83 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 		oldWifi := cfg.WiFi
 		oldTs := cfg.Tailscale
 		oldWg := cfg.WireGuard
-		if newCfg.WiFi.Password == "***" {
-			newCfg.WiFi.Password = cfg.WiFi.Password
+		oldSystem := cfg.System
+
+		// Restore masked sensitive fields
+		wifi := req.WiFi
+		if wifi.Password == "***" {
+			wifi.Password = cfg.WiFi.Password
 		}
-		if newCfg.Tailscale.PreAuthKey == "***" {
-			newCfg.Tailscale.PreAuthKey = cfg.Tailscale.PreAuthKey
+		ts := req.Tailscale
+		if ts.PreAuthKey == "***" {
+			ts.PreAuthKey = cfg.Tailscale.PreAuthKey
 		}
-		if newCfg.WireGuard.Config == "***" {
-			newCfg.WireGuard.Config = cfg.WireGuard.Config
+		wg := req.WireGuard
+		if wg.Config == "***" {
+			wg.Config = cfg.WireGuard.Config
 		}
+
+		// Build system config — keep existing hash/salt unless explicitly changed
+		newSystem := SystemCfg{
+			Hostname:     req.System.Hostname,
+			PasswordHash: cfg.System.PasswordHash,
+			PasswordSalt: cfg.System.PasswordSalt,
+		}
+		if req.System.ClearPassword {
+			newSystem.PasswordHash = ""
+			newSystem.PasswordSalt = ""
+		} else if req.System.Password != "" {
+			salt := generateSalt()
+			newSystem.PasswordHash = hashPassword(req.System.Password, salt)
+			newSystem.PasswordSalt = salt
+		}
+
+		newCfg := AppConfig{
+			Ports:     req.Ports,
+			Ethernet:  req.Ethernet,
+			WiFi:      wifi,
+			WireGuard: wg,
+			Tailscale: ts,
+			SSH:       req.SSH,
+			System:    newSystem,
+		}
+
 		netChanged := oldEth != newCfg.Ethernet || oldWifi != newCfg.WiFi
 		tsChanged := oldTs != newCfg.Tailscale
 		wgChanged := oldWg != newCfg.WireGuard
-		ethCfg := newCfg.Ethernet
-		wifiCfg := newCfg.WiFi
-		tsCfg := newCfg.Tailscale
-		wgCfg := newCfg.WireGuard
-		newPorts := newCfg.Ports
-		sshCfg := newCfg.SSH
+		hostnameChanged := oldSystem.Hostname != newSystem.Hostname
+		passwordCleared := req.System.ClearPassword
+
 		cfg = newCfg
 		err := writeConfig(cfgPath)
 		cfgMu.Unlock()
+
 		if err != nil {
 			http.Error(w, "failed to save config", http.StatusInternalServerError)
 			return
 		}
-		go applyPorts(oldPorts, newPorts)
+
+		go applyPorts(oldPorts, newCfg.Ports)
 		if netChanged {
-			go applyNetworkInterfaces(ethCfg, wifiCfg)
+			go applyNetworkInterfaces(newCfg.Ethernet, newCfg.WiFi)
 		}
 		if tsChanged {
-			go applyTailscale(oldTs, tsCfg)
+			go applyTailscale(oldTs, newCfg.Tailscale)
 		}
 		if wgChanged {
-			go applyWireGuard(oldWg, wgCfg)
+			go applyWireGuard(oldWg, newCfg.WireGuard)
 		}
-		go applySSHKeys(sshCfg)
+		go applySSHKeys(newCfg.SSH)
+		if hostnameChanged {
+			go applyHostname(newSystem.Hostname)
+		}
+		// When password is cleared, invalidate all active sessions so that the
+		// open-access mode takes effect immediately.
+		if passwordCleared {
+			sessionsMu.Lock()
+			sessions = map[string]time.Time{}
+			sessionsMu.Unlock()
+		}
 		w.WriteHeader(http.StatusNoContent)
 
 	default:

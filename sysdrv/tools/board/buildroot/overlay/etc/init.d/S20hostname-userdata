@@ -1,0 +1,40 @@
+#!/bin/sh
+#
+# hostname-userdata  Redirect /etc/hostname to userdata
+#                    so hostname changes persist across firmware updates.
+#
+
+USERDATA_DIR=/userdata/hostname
+USERDATA_CFG=$USERDATA_DIR/hostname
+ETC_CFG=/etc/hostname
+
+start() {
+	mkdir -p "$USERDATA_DIR"
+
+	# Copy default hostname to userdata on first boot after flashing
+	if [ ! -f "$USERDATA_CFG" ]; then
+		cp "$ETC_CFG" "$USERDATA_CFG"
+	fi
+
+	# Replace /etc/hostname with symlink to userdata
+	if [ ! -L "$ETC_CFG" ]; then
+		rm -f "$ETC_CFG"
+		ln -sf "$USERDATA_CFG" "$ETC_CFG"
+	fi
+
+	# Apply hostname from the (possibly persisted) file
+	hostname -F "$USERDATA_CFG"
+}
+
+case "$1" in
+  start)
+	start
+	;;
+  stop|restart|reload)
+	;;
+  *)
+	echo "Usage: $0 {start|stop|restart}"
+	exit 1
+esac
+
+exit 0

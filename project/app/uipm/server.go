@@ -579,24 +579,30 @@ func main() {
 	prevNet.rx, prevNet.tx, _ = readNetBytes()
 	prevNet.t = time.Now()
 
-	http.HandleFunc("/api/config", configHandler)
-	http.HandleFunc("/api/metrics", metricsHandler)
-	http.HandleFunc("/api/network", networkHandler)
-	http.HandleFunc("/api/interfaces", interfacesHandler)
-	http.HandleFunc("/api/wifi/scan", wifiScanHandler)
-	http.HandleFunc("/api/usb/devices", usbDevicesHandler)
-	http.HandleFunc("/api/version", func(w http.ResponseWriter, r *http.Request) {
+	// Auth endpoints — no session required
+	http.HandleFunc("/api/auth/status", authStatusHandler)
+	http.HandleFunc("/api/login", loginHandler)
+	http.HandleFunc("/api/logout", logoutHandler)
+
+	// Protected API endpoints
+	http.HandleFunc("/api/config", authMiddleware(configHandler))
+	http.HandleFunc("/api/metrics", authMiddleware(metricsHandler))
+	http.HandleFunc("/api/network", authMiddleware(networkHandler))
+	http.HandleFunc("/api/interfaces", authMiddleware(interfacesHandler))
+	http.HandleFunc("/api/wifi/scan", authMiddleware(wifiScanHandler))
+	http.HandleFunc("/api/usb/devices", authMiddleware(usbDevicesHandler))
+	http.HandleFunc("/api/version", authMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"version": version})
-	})
-	http.HandleFunc("/api/errors", func(w http.ResponseWriter, r *http.Request) {
+	}))
+	http.HandleFunc("/api/errors", authMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		errs := drainCmdErrors()
 		if errs == nil {
 			errs = []cmdError{}
 		}
 		json.NewEncoder(w).Encode(errs)
-	})
+	}))
 
 	fs := http.FileServer(http.Dir(*dir))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

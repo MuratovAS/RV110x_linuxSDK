@@ -70,3 +70,10 @@ export interface SSHKey {
   name: string;
   publicKey: string;
 }
+
+export interface SystemConfig {
+  hostname?: string;
+  // Transient fields only used in PUT requests — never returned by GET
+  password?: string;
+  clearPassword?: boolean;
+}
