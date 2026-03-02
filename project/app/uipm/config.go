@@ -11,6 +11,20 @@ import (
 	"time"
 )
 
+// FirewallRule defines which interfaces are allowed for a given service.
+type FirewallRule struct {
+	Eth  bool `json:"eth"`
+	Wifi bool `json:"wifi"`
+	VPN  bool `json:"vpn"`
+}
+
+// FirewallCfg holds the 3×3 app×interface permission matrix.
+type FirewallCfg struct {
+	USBIP FirewallRule `json:"usbip"`
+	SSH   FirewallRule `json:"ssh"`
+	Web   FirewallRule `json:"web"`
+}
+
 // SystemCfg holds system-level settings persisted to config.json.
 type SystemCfg struct {
 	Hostname     string `json:"hostname,omitempty"`
@@ -28,13 +42,14 @@ type systemPutReq struct {
 
 // configPutReq mirrors AppConfig but uses systemPutReq for the system field.
 type configPutReq struct {
-	Ports     []PortState   `json:"ports"`
-	Ethernet  EthernetCfg   `json:"ethernet"`
-	WiFi      WiFiCfg       `json:"wifi"`
-	WireGuard WireGuardCfg  `json:"wireguard"`
-	Tailscale TailscaleCfg  `json:"tailscale"`
-	SSH       SSHCfg        `json:"ssh"`
-	System    systemPutReq  `json:"system"`
+	Ports     []PortState  `json:"ports"`
+	Ethernet  EthernetCfg  `json:"ethernet"`
+	WiFi      WiFiCfg      `json:"wifi"`
+	WireGuard WireGuardCfg `json:"wireguard"`
+	Tailscale TailscaleCfg `json:"tailscale"`
+	SSH       SSHCfg       `json:"ssh"`
+	System    systemPutReq `json:"system"`
+	Firewall  FirewallCfg  `json:"firewall"`
 }
 
 type PortState struct {
@@ -92,9 +107,11 @@ type AppConfig struct {
 	Tailscale TailscaleCfg `json:"tailscale"`
 	SSH       SSHCfg       `json:"ssh"`
 	System    SystemCfg    `json:"system"`
+	Firewall  FirewallCfg  `json:"firewall"`
 }
 
 func defaultConfig() AppConfig {
+	allAllowed := FirewallRule{Eth: true, Wifi: true, VPN: true}
 	return AppConfig{
 		Ports: []PortState{
 			{ID: 1, Power: true},
@@ -106,6 +123,7 @@ func defaultConfig() AppConfig {
 		WiFi:      WiFiCfg{Blocked: false, Enabled: false},
 		WireGuard: WireGuardCfg{Blocked: false, Enabled: false, Config: "[Interface]\nPrivateKey = ...\nAddress = 10.0.0.5/32"},
 		Tailscale: TailscaleCfg{Enabled: false, ServerURL: "https://controlplane.tailscale.com"},
+		Firewall:  FirewallCfg{USBIP: allAllowed, SSH: allAllowed, Web: allAllowed},
 	}
 }
 
@@ -307,6 +325,67 @@ func applySSHKeys(ssh SSHCfg) {
 	}
 }
 
+const iptablesConfPath = "/etc/iptables.conf"
+
+// buildIPTablesRules generates an iptables-restore compatible ruleset from fw.
+// Default policy: DROP all INPUT; allow loopback, established, and the
+// specific app×interface combinations that are enabled in the matrix.
+func buildIPTablesRules(fw FirewallCfg) string {
+	ethIface := findEthernetIface()
+	wifiIface := findWirelessIface()
+
+	type entry struct {
+		rule  FirewallRule
+		ports []int
+	}
+	apps := []entry{
+		{fw.USBIP, []int{3240}},
+		{fw.SSH, []int{22}},
+		{fw.Web, []int{80, 443}},
+	}
+
+	var sb strings.Builder
+	sb.WriteString("*filter\n")
+	sb.WriteString(":INPUT DROP [0:0]\n")
+	sb.WriteString(":FORWARD ACCEPT [0:0]\n")
+	sb.WriteString(":OUTPUT ACCEPT [0:0]\n")
+	sb.WriteString("-A INPUT -i lo -j ACCEPT\n")
+	sb.WriteString("-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT\n")
+
+	addRules := func(iface string, ports []int) {
+		for _, port := range ports {
+			sb.WriteString("-A INPUT -i " + iface + " -p tcp --dport " + strconv.Itoa(port) + " -j ACCEPT\n")
+		}
+	}
+
+	for _, app := range apps {
+		if app.rule.Eth && ethIface != "" {
+			addRules(ethIface, app.ports)
+		}
+		if app.rule.Wifi && wifiIface != "" {
+			addRules(wifiIface, app.ports)
+		}
+		if app.rule.VPN {
+			for _, vpnIface := range []string{"wg0", "tailscale0"} {
+				addRules(vpnIface, app.ports)
+			}
+		}
+	}
+
+	sb.WriteString("COMMIT\n")
+	return sb.String()
+}
+
+// applyFirewall writes /etc/iptables.conf and restarts the iptables init.d service.
+func applyFirewall(fw FirewallCfg) {
+	rules := buildIPTablesRules(fw)
+	if err := os.WriteFile(iptablesConfPath, []byte(rules), 0644); err != nil {
+		pushCmdError("firewall: write iptables.conf: " + err.Error())
+		return
+	}
+	runCmd("/etc/init.d/S35iptables", "restart") //nolint:errcheck
+}
+
 func saveWGConfig(raw string, enabled bool) error {
 	if err := os.MkdirAll("/etc/wireguard", 0700); err != nil {
 		return err
@@ -424,6 +503,7 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 		oldTs := cfg.Tailscale
 		oldWg := cfg.WireGuard
 		oldSystem := cfg.System
+		oldFirewall := cfg.Firewall
 
 		// Restore masked sensitive fields
 		wifi := req.WiFi
@@ -462,6 +542,7 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 			Tailscale: ts,
 			SSH:       req.SSH,
 			System:    newSystem,
+			Firewall:  req.Firewall,
 		}
 
 		netChanged := oldEth != newCfg.Ethernet || oldWifi != newCfg.WiFi
@@ -469,6 +550,7 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 		wgChanged := oldWg != newCfg.WireGuard
 		hostnameChanged := oldSystem.Hostname != newSystem.Hostname
 		passwordCleared := req.System.ClearPassword
+		firewallChanged := oldFirewall != newCfg.Firewall
 
 		cfg = newCfg
 		err := writeConfig(cfgPath)
@@ -490,6 +572,9 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 			go applyWireGuard(oldWg, newCfg.WireGuard)
 		}
 		go applySSHKeys(newCfg.SSH)
+		if firewallChanged {
+			go applyFirewall(newCfg.Firewall)
+		}
 		if hostnameChanged {
 			go applyHostname(newSystem.Hostname)
 		}

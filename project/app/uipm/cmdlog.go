@@ -65,6 +65,23 @@ func runCmd(name string, args ...string) error {
 	return err
 }
 
+// runCmdStdin logs and runs a command with the given string piped to stdin.
+func runCmdStdin(stdin, name string, args ...string) error {
+	logLine := strings.Join(redactArgs(append([]string{name}, args...)), " ")
+	log.Printf("[exec] $ %s (stdin %d bytes)", logLine, len(stdin))
+	cmd := exec.Command(name, args...)
+	cmd.Stdin = strings.NewReader(stdin)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		msg := fmt.Sprintf("%s: %v — %s", name, err, strings.TrimSpace(string(out)))
+		log.Printf("[exec] error: %s", msg)
+		pushCmdError(msg)
+	} else {
+		log.Printf("[exec] ok")
+	}
+	return err
+}
+
 // runCmdOutput logs and runs a command, returning stdout.
 func runCmdOutput(name string, args ...string) ([]byte, error) {
 	logLine := strings.Join(redactArgs(append([]string{name}, args...)), " ")

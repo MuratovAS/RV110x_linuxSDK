@@ -16,7 +16,10 @@ import {
   Key,
   Trash2,
   LogOut,
-  Monitor
+  Monitor,
+  Shield,
+  Check,
+  AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
@@ -30,7 +33,8 @@ import {
   VPNConfig,
   UsbipDevice,
   SSHKey,
-  SystemConfig
+  SystemConfig,
+  FirewallConfig
 } from './types';
 
 const fmtSpeed = (mb: number): string => {
@@ -250,6 +254,15 @@ export default function App() {
 
   const [sshKeys, setSshKeys] = useState<SSHKey[]>([]);
   const [isSshEditing, setIsSshEditing] = useState(false);
+
+  const defaultFirewall: FirewallConfig = {
+    usbip: { eth: true, wifi: true, vpn: true },
+    ssh:   { eth: true, wifi: true, vpn: true },
+    web:   { eth: true, wifi: true, vpn: true },
+  };
+  const [firewallConfig, setFirewallConfig] = useState<FirewallConfig>(defaultFirewall);
+  const [savedFirewallConfig, setSavedFirewallConfig] = useState<FirewallConfig>(defaultFirewall);
+  const [isFirewallEditing, setIsFirewallEditing] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
   const [newKeyValue, setNewKeyValue] = useState('');
 
@@ -319,6 +332,7 @@ export default function App() {
     tailscale?: VPNConfig;
     ssh?: SSHKey[];
     system?: SystemConfig;
+    firewall?: FirewallConfig;
   } = {}) => {
     const eth = overrides.ethernet ?? savedEthConfig;
     const wifi = overrides.wifi ?? savedWifiConfig;
@@ -327,6 +341,7 @@ export default function App() {
     const portsList = overrides.ports ?? ports;
     const sshKeysList = overrides.ssh ?? sshKeys;
     const sys: SystemConfig = overrides.system ?? { hostname: savedHostname };
+    const fw = overrides.firewall ?? savedFirewallConfig;
     fetch('/api/config', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -338,6 +353,7 @@ export default function App() {
         tailscale: { blocked: ts.blocked, enabled: ts.enabled, preauthkey: ts.preauthkey, exitNode: ts.exitNode, serverUrl: ts.serverUrl },
         ssh: { keys: sshKeysList },
         system: sys,
+        firewall: fw,
       }),
     }).catch(console.error);
   };
@@ -378,6 +394,10 @@ export default function App() {
         if (data.system?.hostname) {
           setSavedHostname(data.system.hostname);
           setHostname(data.system.hostname);
+        }
+        if (data.firewall) {
+          setFirewallConfig(data.firewall);
+          setSavedFirewallConfig(data.firewall);
         }
       })
       .catch(console.error);
@@ -456,6 +476,14 @@ export default function App() {
     const interval = setInterval(fetchMetrics, 3000);
     return () => clearInterval(interval);
   }, []);
+
+  const isFwChanged = JSON.stringify(firewallConfig) !== JSON.stringify(savedFirewallConfig);
+
+  const handleApplyFirewall = () => {
+    setSavedFirewallConfig(firewallConfig);
+    setIsFirewallEditing(false);
+    saveToServer({ firewall: firewallConfig });
+  };
 
   const isEthChanged = JSON.stringify(ethConfig) !== JSON.stringify(savedEthConfig);
   const isWifiChanged = JSON.stringify(wifiConfig) !== JSON.stringify(savedWifiConfig);
@@ -1084,7 +1112,7 @@ export default function App() {
                         />
                       </div>
 
-                      <div className="flex items-center justify-between p-2 bg-slate-50 rounded-lg border border-slate-100">
+                      <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-slate-600">Exit Node</span>
                         <button 
                           onClick={() => setTsConfig({...tsConfig, exitNode: !tsConfig.exitNode})}
@@ -1306,6 +1334,101 @@ export default function App() {
                           </motion.button>
                         )}
                       </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Firewall */}
+              <div className="card p-5 flex flex-col gap-4 group">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100">
+                    <Shield className="w-5 h-5 text-slate-500" />
+                  </div>
+                  <div className="leading-tight">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-slate-800">Firewall</h3>
+                      <button
+                        onClick={() => setIsFirewallEditing(!isFirewallEditing)}
+                        className={`p-1 rounded-md transition-all ${isFirewallEditing ? 'bg-maroon/10 text-maroon' : 'hover:bg-slate-100 text-slate-400'} ${isFirewallEditing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                      >
+                        <Edit2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <span className="text-xs font-mono font-medium text-slate-500">
+                      {(() => {
+                        const rules = savedFirewallConfig;
+                        const count = (['usbip', 'ssh', 'web'] as const).reduce((s, app) =>
+                          s + (['eth', 'wifi', 'vpn'] as const).filter(i => rules[app][i]).length, 0);
+                        return `${count} / 9 allowed`;
+                      })()}
+                    </span>
+                  </div>
+                </div>
+
+                <AnimatePresence>
+                  {isFirewallEditing && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="space-y-3 overflow-hidden"
+                    >
+                      {/* Header row */}
+                      <div className="grid grid-cols-4">
+                        <div />
+                        {(['usbip', 'ssh', 'web'] as const).map(app => (
+                          <div key={app} className="text-center text-[10px] font-bold text-slate-400 uppercase tracking-wide pb-1">{app}</div>
+                        ))}
+                      </div>
+                      {/* Matrix rows */}
+                      {(['eth', 'wifi', 'vpn'] as const).map((iface, ri) => (
+                        <div key={iface} className={`grid grid-cols-4 items-center py-1 ${ri < 2 ? 'border-b border-slate-100' : ''}`}>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">{iface}</span>
+                          {(['usbip', 'ssh', 'web'] as const).map(app => {
+                            const on = firewallConfig[app][iface];
+                            return (
+                              <div key={app} className="flex justify-center">
+                                <button
+                                  onClick={() => setFirewallConfig(prev => ({
+                                    ...prev,
+                                    [app]: { ...prev[app], [iface]: !on },
+                                  }))}
+                                  className={`w-6 h-6 rounded flex items-center justify-center transition-colors ${on ? 'bg-maroon text-white' : 'bg-slate-100 hover:bg-slate-200 text-transparent'}`}
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
+
+                      {(['usbip', 'ssh', 'web'] as const).some(
+                        app => !firewallConfig[app].eth && !firewallConfig[app].wifi && !firewallConfig[app].vpn
+                      ) && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="flex items-start gap-2 rounded-lg bg-orange-50 border border-orange-200 px-3 py-2"
+                        >
+                          <AlertTriangle className="w-3.5 h-3.5 text-orange-500 mt-0.5 shrink-0" />
+                          <span className="text-xs text-orange-700 leading-snug">
+                            One or more services are blocked on all interfaces — you may lose access to the device.
+                          </span>
+                        </motion.div>
+                      )}
+
+                      {isFwChanged && (
+                        <motion.button
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          onClick={handleApplyFirewall}
+                          className="btn-primary w-full text-xs py-1.5 shadow-md shadow-maroon/10"
+                        >
+                          Apply Changes
+                        </motion.button>
+                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>

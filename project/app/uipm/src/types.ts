@@ -77,3 +77,15 @@ export interface SystemConfig {
   password?: string;
   clearPassword?: boolean;
 }
+
+export interface FirewallRule {
+  eth: boolean;
+  wifi: boolean;
+  vpn: boolean;
+}
+
+export interface FirewallConfig {
+  usbip: FirewallRule;
+  ssh: FirewallRule;
+  web: FirewallRule;
+}
