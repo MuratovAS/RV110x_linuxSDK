@@ -210,7 +210,7 @@ export default function App() {
   useEffect(() => {
     const fetchNetwork = async () => {
       try {
-        const res = await fetch('/api/network');
+        const res = await fetchApi('/api/network');
         const data = await res.json();
         setNetworkHistory(prev => [...prev.slice(1), { rx: data.rx, tx: data.tx }]);
       } catch {
@@ -227,7 +227,7 @@ export default function App() {
 
   useEffect(() => {
     const fetchUsb = () => {
-      fetch('/api/usb/devices')
+      fetchApi('/api/usb/devices')
         .then(r => r.json())
         .then((data: UsbipDevice[]) => setUsbDevices(data ?? []))
         .catch(() => {});
@@ -258,7 +258,7 @@ export default function App() {
 
   const scanWifi = () => {
     setWifiScanning(true);
-    fetch('/api/wifi/scan')
+    fetchApi('/api/wifi/scan')
       .then(r => r.json())
       .then((data: WifiNetwork[]) => setWifiNetworks(data))
       .catch(() => setWifiNetworks([]))
@@ -314,6 +314,12 @@ export default function App() {
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
 
+  const fetchApi = (input: RequestInfo | URL, init?: RequestInit) =>
+    fetch(input, init).then(res => {
+      if (res.status === 401) setIsAuthenticated(false);
+      return res;
+    });
+
   // System settings state
   const [hostname, setHostname] = useState('');
   const [savedHostname, setSavedHostname] = useState('');
@@ -325,7 +331,7 @@ export default function App() {
 
   // Check auth status on mount
   useEffect(() => {
-    fetch('/api/auth/status')
+    fetchApi('/api/auth/status')
       .then(r => r.json())
       .then((data: { passwordRequired: boolean; authenticated: boolean }) => {
         setPasswordRequired(data.passwordRequired);
@@ -340,7 +346,7 @@ export default function App() {
     setLoginLoading(true);
     setLoginError('');
     try {
-      const res = await fetch('/api/login', {
+      const res = await fetchApi('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: loginPassword }),
@@ -359,7 +365,7 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    await fetch('/api/logout', { method: 'POST' }).catch(() => {});
+    await fetchApi('/api/logout', { method: 'POST' }).catch(() => {});
     setIsAuthenticated(false);
     setPasswordRequired(true);
     setLoginPassword('');
@@ -383,7 +389,7 @@ export default function App() {
     const sshKeysList = overrides.ssh ?? sshKeys;
     const sys: SystemConfig = overrides.system ?? { hostname: savedHostname, theme: darkMode ? 'dark' : 'light' };
     const fw = overrides.firewall ?? savedFirewallConfig;
-    fetch('/api/config', {
+    fetchApi('/api/config', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -413,7 +419,7 @@ export default function App() {
   const [appVersion, setAppVersion] = React.useState('...');
 
   React.useEffect(() => {
-    fetch('/api/config')
+    fetchApi('/api/config')
       .then(r => r.json())
       .then((data: any) => {
         if (data.ethernet) {
@@ -459,7 +465,7 @@ export default function App() {
   }, [isAuthenticated]);
 
   React.useEffect(() => {
-    fetch('/api/version')
+    fetchApi('/api/version')
       .then(r => r.json())
       .then(d => setAppVersion(d.version))
       .catch(() => setAppVersion('unknown'));
@@ -473,7 +479,7 @@ export default function App() {
 
   React.useEffect(() => {
     const fetch_ = () =>
-      fetch('/api/interfaces')
+      fetchApi('/api/interfaces')
         .then(r => r.json())
         .then(setIfaces)
         .catch(() => {});
@@ -497,7 +503,7 @@ export default function App() {
 
   useEffect(() => {
     const poll = () => {
-      fetch('/api/errors')
+      fetchApi('/api/errors')
         .then(r => r.json())
         .then((data: { message: string }[]) => {
           if (!data || data.length === 0) return;
@@ -520,7 +526,7 @@ export default function App() {
   React.useEffect(() => {
     const fetchMetrics = async () => {
       try {
-        const res = await fetch('/api/metrics');
+        const res = await fetchApi('/api/metrics');
         const data = await res.json();
         setMetrics(data);
       } catch {
@@ -799,10 +805,10 @@ export default function App() {
         </section>
 
         {/* Sidebar Blocks */}
-        <aside className="lg:col-span-4 flex flex-col gap-8">
+        <aside className="lg:col-span-4 flex flex-col gap-6">
           
           {/* Block 2: Network Settings */}
-          <section className="flex flex-col gap-4">
+          <section className="flex flex-col gap-6">
             <h2 className="text-lg font-bold flex items-center gap-2">
               <Globe className="w-5 h-5 text-maroon" />
               Network
@@ -1094,7 +1100,7 @@ export default function App() {
           </section>
 
           {/* Block 3: VPN Settings */}
-          <section className="flex flex-col gap-4">
+          <section className="flex flex-col gap-6">
             <h2 className="text-lg font-bold flex items-center gap-2">
               <ShieldCheck className="w-5 h-5 text-maroon" />
               VPN Services
@@ -1310,7 +1316,7 @@ export default function App() {
           </section>
 
           {/* Block 4: System */}
-          <section className="flex flex-col gap-4">
+          <section className="flex flex-col gap-6">
             <h2 className="text-lg font-bold flex items-center gap-2">
               <Settings2 className="w-5 h-5 text-maroon" />
               System
