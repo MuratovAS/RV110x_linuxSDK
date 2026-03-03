@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"crypto/sha1"
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -36,12 +38,6 @@ type cpuStat struct {
 	steal   uint64
 }
 
-type netSample struct {
-	rx uint64
-	tx uint64
-	t  time.Time
-}
-
 type NetStats struct {
 	RX float64 `json:"rx"`
 	TX float64 `json:"tx"`
@@ -53,13 +49,14 @@ type InterfaceInfo struct {
 	MAC  string   `json:"mac"`
 }
 
-var (
-	prevCPU cpuStat
-	mu      sync.Mutex
+type AppState struct {
+	Traffic    NetStats                 `json:"traffic"`
+	Metrics    Metrics                  `json:"metrics"`
+	Interfaces map[string]InterfaceInfo `json:"interfaces"`
+	Errors     []cmdError               `json:"errors"`
+	USB        []UsbipDevice            `json:"usb"`
+}
 
-	prevNet netSample
-	netMu   sync.Mutex
-)
 
 func readCPUStat() (cpuStat, error) {
 	f, err := os.Open("/proc/stat")
@@ -428,17 +425,13 @@ func ensureNamesFor(busids []string) {
 	}
 }
 
-func usbDevicesHandler(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
+func readUsbDevices() []UsbipDevice {
 	devices := scanSysfsDevices()
-
 	busids := make([]string, len(devices))
 	for i, d := range devices {
 		busids[i] = d.BusID
 	}
 	ensureNamesFor(busids)
-
 	usbNameCacheMu.Lock()
 	current := make(map[string]bool, len(devices))
 	for i := range devices {
@@ -451,11 +444,10 @@ func usbDevicesHandler(w http.ResponseWriter, _ *http.Request) {
 		}
 	}
 	usbNameCacheMu.Unlock()
-
 	if devices == nil {
 		devices = []UsbipDevice{}
 	}
-	json.NewEncoder(w).Encode(devices)
+	return devices
 }
 
 func wifiScanHandler(w http.ResponseWriter, _ *http.Request) {
@@ -477,13 +469,11 @@ func wifiScanHandler(w http.ResponseWriter, _ *http.Request) {
 	json.NewEncoder(w).Encode(parseIwlistOutput(string(out)))
 }
 
-func interfacesHandler(w http.ResponseWriter, _ *http.Request) {
+func readInterfaces() map[string]InterfaceInfo {
 	ifaces, err := net.Interfaces()
 	if err != nil {
-		http.Error(w, "failed to list interfaces", http.StatusInternalServerError)
-		return
+		return map[string]InterfaceInfo{}
 	}
-
 	result := make(map[string]InterfaceInfo)
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagLoopback != 0 {
@@ -513,57 +503,125 @@ func interfacesHandler(w http.ResponseWriter, _ *http.Request) {
 		}
 		result[iface.Name] = info
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	return result
 }
 
-func networkHandler(w http.ResponseWriter, r *http.Request) {
-	netMu.Lock()
-	defer netMu.Unlock()
+const wsGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
-	rx, tx, err := readNetBytes()
+func wsHandshake(w http.ResponseWriter, r *http.Request) (net.Conn, *bufio.ReadWriter, error) {
+	if strings.ToLower(r.Header.Get("Upgrade")) != "websocket" {
+		http.Error(w, "websocket upgrade required", http.StatusBadRequest)
+		return nil, nil, fmt.Errorf("not a websocket request")
+	}
+	key := r.Header.Get("Sec-Websocket-Key")
+	h := sha1.New()
+	h.Write([]byte(key + wsGUID))
+	accept := base64.StdEncoding.EncodeToString(h.Sum(nil))
+
+	hj, ok := w.(http.Hijacker)
+	if !ok {
+		http.Error(w, "hijacking not supported", http.StatusInternalServerError)
+		return nil, nil, fmt.Errorf("hijacking not supported")
+	}
+	conn, rw, err := hj.Hijack()
 	if err != nil {
-		http.Error(w, "failed to read /proc/net/dev", http.StatusInternalServerError)
-		return
+		return nil, nil, err
 	}
-
-	now := time.Now()
-	elapsed := now.Sub(prevNet.t).Seconds()
-
-	var rxMB, txMB float64
-	if elapsed > 0 && !prevNet.t.IsZero() {
-		rxMB = float64(rx-prevNet.rx) / elapsed / 1024 / 1024
-		txMB = float64(tx-prevNet.tx) / elapsed / 1024 / 1024
-	}
-
-	prevNet = netSample{rx: rx, tx: tx, t: now}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(NetStats{RX: rxMB, TX: txMB})
+	resp := "HTTP/1.1 101 Switching Protocols\r\n" +
+		"Upgrade: websocket\r\n" +
+		"Connection: Upgrade\r\n" +
+		"Sec-WebSocket-Accept: " + accept + "\r\n\r\n"
+	rw.WriteString(resp) //nolint:errcheck
+	rw.Flush()           //nolint:errcheck
+	return conn, rw, nil
 }
 
-func metricsHandler(w http.ResponseWriter, r *http.Request) {
-	mu.Lock()
-	defer mu.Unlock()
+func wsSendText(rw *bufio.ReadWriter, msg []byte) error {
+	n := len(msg)
+	header := make([]byte, 0, 10)
+	header = append(header, 0x81) // FIN + text opcode
+	switch {
+	case n < 126:
+		header = append(header, byte(n))
+	case n < 65536:
+		header = append(header, 126, byte(n>>8), byte(n))
+	default:
+		header = append(header, 127, 0, 0, 0, 0, byte(n>>24), byte(n>>16), byte(n>>8), byte(n))
+	}
+	if _, err := rw.Write(header); err != nil {
+		return err
+	}
+	if _, err := rw.Write(msg); err != nil {
+		return err
+	}
+	return rw.Flush()
+}
 
-	curr, err := readCPUStat()
+func stateWsHandler(w http.ResponseWriter, r *http.Request) {
+	conn, rw, err := wsHandshake(w, r)
 	if err != nil {
-		http.Error(w, "failed to read /proc/stat", http.StatusInternalServerError)
 		return
 	}
+	defer conn.Close()
 
-	cpu, _ := calcMetrics(prevCPU, curr)
-	prevCPU = curr
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		buf := make([]byte, 256)
+		for {
+			if _, err := rw.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
 
-	m := Metrics{
-		CPU:    cpu,
-		RAM:    readRAM(),
-		Uptime: readUptime(),
+	rx0, tx0, _ := readNetBytes()
+	t0 := time.Now()
+	prevCPULocal, _ := readCPUStat()
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-done:
+			return
+		case <-ticker.C:
+			// Traffic
+			rx1, tx1, _ := readNetBytes()
+			t1 := time.Now()
+			elapsed := t1.Sub(t0).Seconds()
+			var rxMB, txMB float64
+			if elapsed > 0 {
+				rxMB = float64(rx1-rx0) / elapsed / 1024 / 1024
+				txMB = float64(tx1-tx0) / elapsed / 1024 / 1024
+			}
+			rx0, tx0, t0 = rx1, tx1, t1
+
+			// Metrics
+			currCPU, _ := readCPUStat()
+			cpu, _ := calcMetrics(prevCPULocal, currCPU)
+			prevCPULocal = currCPU
+
+			// Errors
+			errs := drainCmdErrors()
+			if errs == nil {
+				errs = []cmdError{}
+			}
+
+			state := AppState{
+				Traffic:    NetStats{RX: rxMB, TX: txMB},
+				Metrics:    Metrics{CPU: cpu, RAM: readRAM(), Uptime: readUptime()},
+				Interfaces: readInterfaces(),
+				Errors:     errs,
+				USB:        readUsbDevices(),
+			}
+			data, _ := json.Marshal(state)
+			if err := wsSendText(rw, data); err != nil {
+				return
+			}
+		}
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(m)
 }
 
 func main() {
@@ -578,39 +636,15 @@ func main() {
 	}
 	applyPorts(nil, cfg.Ports)
 
-	var err error
-	prevCPU, err = readCPUStat()
-	if err != nil {
-		log.Fatalf("failed to read initial CPU stat: %v", err)
-	}
-
-	prevNet.rx, prevNet.tx, _ = readNetBytes()
-	prevNet.t = time.Now()
-
-	// Auth endpoints — no session required
-	http.HandleFunc("/api/auth/status", authStatusHandler)
+	// Public endpoints — no session required
+	http.HandleFunc("/api/info", infoHandler)
 	http.HandleFunc("/api/login", loginHandler)
 	http.HandleFunc("/api/logout", logoutHandler)
 
 	// Protected API endpoints
 	http.HandleFunc("/api/config", authMiddleware(configHandler))
-	http.HandleFunc("/api/metrics", authMiddleware(metricsHandler))
-	http.HandleFunc("/api/network", authMiddleware(networkHandler))
-	http.HandleFunc("/api/interfaces", authMiddleware(interfacesHandler))
+	http.HandleFunc("/api/state", authMiddleware(stateWsHandler))
 	http.HandleFunc("/api/wifi/scan", authMiddleware(wifiScanHandler))
-	http.HandleFunc("/api/usb/devices", authMiddleware(usbDevicesHandler))
-	http.HandleFunc("/api/version", authMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"version": version})
-	}))
-	http.HandleFunc("/api/errors", authMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		errs := drainCmdErrors()
-		if errs == nil {
-			errs = []cmdError{}
-		}
-		json.NewEncoder(w).Encode(errs)
-	}))
 
 	fs := http.FileServer(http.Dir(*dir))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

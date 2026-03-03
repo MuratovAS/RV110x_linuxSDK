@@ -83,16 +83,17 @@ func setSessionCookie(w http.ResponseWriter, token string) {
 	})
 }
 
-// authStatusHandler returns whether a password is required and whether the
-// current request is already authenticated. Does NOT itself require auth.
-func authStatusHandler(w http.ResponseWriter, r *http.Request) {
+// infoHandler returns public app info: auth status and firmware version.
+// Does NOT itself require auth.
+func infoHandler(w http.ResponseWriter, r *http.Request) {
 	cfgMu.RLock()
 	hash := cfg.System.PasswordHash
 	cfgMu.RUnlock()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{
+	json.NewEncoder(w).Encode(map[string]any{
 		"passwordRequired": hash != "",
 		"authenticated":    isAuthenticated(r),
+		"version":          version,
 	})
 }
 

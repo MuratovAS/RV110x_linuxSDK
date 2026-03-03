@@ -207,37 +207,10 @@ export default function App() {
     Array.from({ length: 60 }, () => ({ rx: 0, tx: 0 }))
   );
 
-  useEffect(() => {
-    const fetchNetwork = async () => {
-      try {
-        const res = await fetchApi('/api/network');
-        const data = await res.json();
-        setNetworkHistory(prev => [...prev.slice(1), { rx: data.rx, tx: data.tx }]);
-      } catch {
-        // keep previous values on error
-      }
-    };
-    fetchNetwork();
-    const interval = setInterval(fetchNetwork, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
   const [ports, setPorts] = useState<HubPort[]>(INITIAL_PORTS);
   const [usbDevices, setUsbDevices] = useState<UsbipDevice[]>([]);
   const [editingPortId, setEditingPortId] = useState<number | null>(null);
   const [editingPortName, setEditingPortName] = useState('');
-
-  useEffect(() => {
-    const fetchUsb = () => {
-      fetchApi('/api/usb/devices')
-        .then(r => r.json())
-        .then((data: UsbipDevice[]) => setUsbDevices(data ?? []))
-        .catch(() => {});
-    };
-    fetchUsb();
-    const interval = setInterval(fetchUsb, 5000);
-    return () => clearInterval(interval);
-  }, []);
 
   const [savedEthConfig, setSavedEthConfig] = useState<EthernetConfig>({
     mode: 'dhcp',
@@ -331,14 +304,15 @@ export default function App() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
-  // Check auth status on mount
+  // Check auth status and version on mount
   useEffect(() => {
-    fetchApi('/api/auth/status')
+    fetchApi('/api/info')
       .then(r => r.json())
-      .then((data: { passwordRequired: boolean; authenticated: boolean }) => {
+      .then((data: { passwordRequired: boolean; authenticated: boolean; version: string }) => {
         setPasswordRequired(data.passwordRequired);
         setHasPassword(data.passwordRequired);
         setIsAuthenticated(data.authenticated);
+        setAppVersion(data.version);
       })
       .catch(() => setIsAuthenticated(true));
   }, []);
@@ -466,29 +440,12 @@ export default function App() {
       .catch(console.error);
   }, [isAuthenticated]);
 
-  React.useEffect(() => {
-    fetchApi('/api/version')
-      .then(r => r.json())
-      .then(d => setAppVersion(d.version))
-      .catch(() => setAppVersion('unknown'));
-  }, []);
 
   const [ifaces, setIfaces] = React.useState<IfaceMap>({});
   const [isEthInfo, setIsEthInfo] = useState(false);
   const [isWifiInfo, setIsWifiInfo] = useState(false);
   const [isTsInfo, setIsTsInfo] = useState(false);
   const [isWgInfo, setIsWgInfo] = useState(false);
-
-  React.useEffect(() => {
-    const fetch_ = () =>
-      fetchApi('/api/interfaces')
-        .then(r => r.json())
-        .then(setIfaces)
-        .catch(() => {});
-    fetch_();
-    const t = setInterval(fetch_, 10000);
-    return () => clearInterval(t);
-  }, []);
 
   const ifaceIPs = (patterns: RegExp[]): { ipv4: string[]; ipv6: string[] } | null => {
     for (const [name, info] of Object.entries(ifaces)) {
@@ -503,41 +460,52 @@ export default function App() {
   const [cmdErrors, setCmdErrors] = useState<{ id: number; message: string }[]>([]);
   const cmdErrorIdRef = useRef(0);
 
-  useEffect(() => {
-    const poll = () => {
-      fetchApi('/api/errors')
-        .then(r => r.json())
-        .then((data: { message: string }[]) => {
-          if (!data || data.length === 0) return;
-          data.forEach(({ message }) => {
-            const id = ++cmdErrorIdRef.current;
-            setCmdErrors(prev => [...prev, { id, message }]);
-            setTimeout(() => {
-              setCmdErrors(prev => prev.filter(e => e.id !== id));
-            }, 15000);
-          });
-        })
-        .catch(() => {});
-    };
-    const interval = setInterval(poll, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
   const [metrics, setMetrics] = React.useState({ cpu: 0, ram: 0, uptime: '...' });
 
-  React.useEffect(() => {
-    const fetchMetrics = async () => {
-      try {
-        const res = await fetchApi('/api/metrics');
-        const data = await res.json();
-        setMetrics(data);
-      } catch {
-        // keep previous values on error
-      }
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const connect = () => {
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${proto}//${window.location.host}/api/state`);
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.traffic) setNetworkHistory(prev => [...prev.slice(1), { rx: data.traffic.rx, tx: data.traffic.tx }]);
+          if (data.metrics) setMetrics(data.metrics);
+          if (data.interfaces) setIfaces(data.interfaces);
+          if (data.usb) setUsbDevices(data.usb ?? []);
+          if (data.errors?.length) {
+            data.errors.forEach(({ message }: { message: string }) => {
+              const id = ++cmdErrorIdRef.current;
+              setCmdErrors(prev => [...prev, { id, message }]);
+              setTimeout(() => {
+                setCmdErrors(prev => prev.filter(e => e.id !== id));
+              }, 15000);
+            });
+          }
+        } catch {
+          // ignore parse errors
+        }
+      };
+
+      ws.onclose = () => {
+        reconnectTimer = setTimeout(connect, 2000);
+      };
+
+      ws.onerror = () => {
+        ws?.close();
+      };
     };
-    fetchMetrics();
-    const interval = setInterval(fetchMetrics, 3000);
-    return () => clearInterval(interval);
+
+    connect();
+
+    return () => {
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      ws?.close();
+    };
   }, []);
 
   const isFwChanged = JSON.stringify(firewallConfig) !== JSON.stringify(savedFirewallConfig);
