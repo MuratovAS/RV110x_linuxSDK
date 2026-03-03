@@ -28,6 +28,7 @@ type FirewallCfg struct {
 // SystemCfg holds system-level settings persisted to config.json.
 type SystemCfg struct {
 	Hostname     string `json:"hostname,omitempty"`
+	Theme        string `json:"theme,omitempty"`
 	PasswordHash string `json:"passwordHash,omitempty"`
 	PasswordSalt string `json:"passwordSalt,omitempty"`
 }
@@ -36,6 +37,7 @@ type SystemCfg struct {
 // It is never stored to disk.
 type systemPutReq struct {
 	Hostname      string `json:"hostname"`
+	Theme         string `json:"theme"`
 	Password      string `json:"password"`
 	ClearPassword bool   `json:"clearPassword"`
 }
@@ -518,6 +520,7 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 		oldWg := cfg.WireGuard
 		oldSystem := cfg.System
 		oldFirewall := cfg.Firewall
+		oldSSH := cfg.SSH
 
 		// Restore masked sensitive fields
 		wifi := req.WiFi
@@ -536,6 +539,7 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 		// Build system config — keep existing hash/salt unless explicitly changed
 		newSystem := SystemCfg{
 			Hostname:     req.System.Hostname,
+			Theme:        req.System.Theme,
 			PasswordHash: cfg.System.PasswordHash,
 			PasswordSalt: cfg.System.PasswordSalt,
 		}
@@ -565,6 +569,9 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 		hostnameChanged := oldSystem.Hostname != newSystem.Hostname
 		passwordCleared := req.System.ClearPassword
 		firewallChanged := oldFirewall != newCfg.Firewall
+		oldSSHJSON, _ := json.Marshal(oldSSH)
+		newSSHJSON, _ := json.Marshal(newCfg.SSH)
+		sshChanged := string(oldSSHJSON) != string(newSSHJSON)
 
 		cfg = newCfg
 		err := writeConfig(cfgPath)
@@ -585,7 +592,9 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 		if wgChanged {
 			go applyWireGuard(oldWg, newCfg.WireGuard)
 		}
-		go applySSHKeys(newCfg.SSH)
+		if sshChanged {
+			go applySSHKeys(newCfg.SSH)
+		}
 		if firewallChanged {
 			go applyFirewall(newCfg.Firewall)
 		}

@@ -182,15 +182,10 @@ const InterfaceDetails: React.FC<{ patterns: RegExp[]; ifaces: IfaceMap }> = ({ 
   );
 };
 
-const getThemeCookie = (): 'dark' | 'light' | undefined =>
-  document.cookie.split('; ').find(r => r.startsWith('theme='))?.split('=')[1] as 'dark' | 'light' | undefined;
-
-const setThemeCookie = (theme: 'dark' | 'light') => {
-  document.cookie = `theme=${theme}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
-};
-
 export default function App() {
-  const [darkMode, setDarkMode] = useState<boolean>(() => getThemeCookie() === 'dark');
+  const [darkMode, setDarkMode] = useState<boolean>(
+    () => window.matchMedia('(prefers-color-scheme: dark)').matches
+  );
 
   useEffect(() => {
     if (darkMode) {
@@ -198,7 +193,6 @@ export default function App() {
     } else {
       document.documentElement.classList.remove('dark');
     }
-    setThemeCookie(darkMode ? 'dark' : 'light');
   }, [darkMode]);
 
   const toggleDarkMode = () => setDarkMode(prev => !prev);
@@ -308,11 +302,12 @@ export default function App() {
   useEffect(() => {
     fetchApi('/api/info')
       .then(r => r.json())
-      .then((data: { passwordRequired: boolean; authenticated: boolean; version: string }) => {
+      .then((data: { passwordRequired: boolean; authenticated: boolean; version: string; theme?: string }) => {
         setPasswordRequired(data.passwordRequired);
         setHasPassword(data.passwordRequired);
         setIsAuthenticated(data.authenticated);
         setAppVersion(data.version);
+        if (data.theme) setDarkMode(data.theme === 'dark');
       })
       .catch(() => setIsAuthenticated(true));
   }, []);
@@ -381,13 +376,10 @@ export default function App() {
     }).catch(console.error);
   };
 
-  const isFirstRender = useRef(true);
+  const isConfigLoaded = useRef(false);
 
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
+    if (!isConfigLoaded.current) return;
     saveToServer({ system: { hostname: savedHostname, theme: darkMode ? 'dark' : 'light' } });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [darkMode]);
@@ -429,13 +421,11 @@ export default function App() {
           setSavedHostname(data.system.hostname);
           setHostname(data.system.hostname);
         }
-        if (data.system?.theme) {
-          setDarkMode(data.system.theme === 'dark');
-        }
         if (data.firewall) {
           setFirewallConfig(data.firewall);
           setSavedFirewallConfig(data.firewall);
         }
+        isConfigLoaded.current = true;
       })
       .catch(console.error);
   }, [isAuthenticated]);
@@ -728,7 +718,7 @@ export default function App() {
         ))}
       </AnimatePresence>
 
-      <main className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-x-3 dark:lg:gap-x-4">
+      <main className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-x-4">
         
         {/* Block 1: Ports & Devices */}
         <section className="lg:col-span-8 flex flex-col gap-3">

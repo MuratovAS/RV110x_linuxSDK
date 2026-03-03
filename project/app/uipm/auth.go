@@ -88,12 +88,14 @@ func setSessionCookie(w http.ResponseWriter, token string) {
 func infoHandler(w http.ResponseWriter, r *http.Request) {
 	cfgMu.RLock()
 	hash := cfg.System.PasswordHash
+	theme := cfg.System.Theme
 	cfgMu.RUnlock()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"passwordRequired": hash != "",
 		"authenticated":    isAuthenticated(r),
 		"version":          version,
+		"theme":            theme,
 	})
 }
 

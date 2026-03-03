@@ -3,6 +3,10 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    scrollbar-gutter: stable;
+    border-style: none;
+  }
   body {
     @apply bg-[#f8f9fa] text-slate-900 font-sans;
   }
