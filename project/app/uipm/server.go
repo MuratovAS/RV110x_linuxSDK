@@ -266,12 +266,14 @@ func parseIwlistOutput(data string) []WifiNetwork {
 }
 
 type UsbipDevice struct {
-	BusID     string `json:"busid"`
-	VendorID  string `json:"vendorId"`
-	ProductID string `json:"productId"`
-	Name      string `json:"name"`
-	Port      int    `json:"port"`
-	Occupied  bool   `json:"occupied"`
+	BusID        string `json:"busid"`
+	VendorID     string `json:"vendorId"`
+	ProductID    string `json:"productId"`
+	Manufacturer string `json:"manufacturer,omitempty"`
+	Product      string `json:"product,omitempty"`
+	Name         string `json:"name"`
+	Port         int    `json:"port"`
+	Occupied     bool   `json:"occupied"`
 }
 
 func parseUsbipList(data string) []UsbipDevice {
@@ -374,6 +376,12 @@ func scanSysfsDevices() []UsbipDevice {
 		}
 		if d, err := os.ReadFile(fmt.Sprintf("/sys/bus/usb/devices/%s/usbip_status", busid)); err == nil {
 			dev.Occupied = strings.TrimSpace(string(d)) == "2"
+		}
+		if d, err := os.ReadFile(fmt.Sprintf("/sys/bus/usb/devices/%s/manufacturer", busid)); err == nil {
+			dev.Manufacturer = strings.TrimSpace(string(d))
+		}
+		if d, err := os.ReadFile(fmt.Sprintf("/sys/bus/usb/devices/%s/product", busid)); err == nil {
+			dev.Product = strings.TrimSpace(string(d))
 		}
 		if dashIdx := strings.Index(busid, "-"); dashIdx >= 0 {
 			chain := strings.Split(busid[dashIdx+1:], ".")

@@ -53,8 +53,9 @@ type configPutReq struct {
 }
 
 type PortState struct {
-	ID    int  `json:"id"`
-	Power bool `json:"power"`
+	ID    int    `json:"id"`
+	Power bool   `json:"power"`
+	Name  string `json:"name,omitempty"`
 }
 
 type EthernetCfg struct {

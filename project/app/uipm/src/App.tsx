@@ -224,6 +224,8 @@ export default function App() {
 
   const [ports, setPorts] = useState<HubPort[]>(INITIAL_PORTS);
   const [usbDevices, setUsbDevices] = useState<UsbipDevice[]>([]);
+  const [editingPortId, setEditingPortId] = useState<number | null>(null);
+  const [editingPortName, setEditingPortName] = useState('');
 
   useEffect(() => {
     const fetchUsb = () => {
@@ -393,7 +395,7 @@ export default function App() {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        ports: portsList.map(p => ({ id: p.id, power: p.power })),
+        ports: portsList.map(p => ({ id: p.id, power: p.power, name: p.name })),
         ethernet: eth,
         wifi: wifi,
         wireguard: { blocked: wg.blocked, enabled: wg.enabled, config: wg.config },
@@ -442,8 +444,8 @@ export default function App() {
         }
         if (data.ports) {
           setPorts(prev => prev.map(p => {
-            const saved = data.ports.find((sp: { id: number }) => sp.id === p.id);
-            return saved ? { ...p, power: saved.power } : p;
+            const saved = data.ports.find((sp: { id: number; name?: string }) => sp.id === p.id);
+            return saved ? { ...p, power: saved.power, name: saved.name } : p;
           }));
         }
         if (data.ssh?.keys) {
@@ -632,6 +634,13 @@ export default function App() {
     });
   };
 
+  const savePortName = (portId: number, name: string) => {
+    const next = ports.map(p => p.id === portId ? { ...p, name: name || undefined } : p);
+    setPorts(next);
+    saveToServer({ ports: next });
+    setEditingPortId(null);
+  };
+
   // Loading auth state
   if (isAuthenticated === null) {
     return (
@@ -719,6 +728,15 @@ export default function App() {
           >
             {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
+          {passwordRequired && (
+            <button
+              onClick={handleLogout}
+              className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-500 dark:text-slate-300 transition-colors"
+              title="Logout"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </header>
 
@@ -742,27 +760,49 @@ export default function App() {
         ))}
       </AnimatePresence>
 
-      <main className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <main className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-x-3 dark:lg:gap-x-4">
         
-        {/* Block 1: USB Ports & Devices */}
-        <section className="lg:col-span-8 flex flex-col gap-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold flex items-center gap-2">
+        {/* Block 1: Ports & Devices */}
+        <section className="lg:col-span-8 flex flex-col gap-3">
+          <div className="flex flex-nowrap items-center justify-between px-2">
+            <h2 className="text-lg font-bold flex items-center gap-2 leading-none">
               <Usb className="w-5 h-5 text-maroon" />
-              USB Ports & Devices
+              Ports & Devices
             </h2>
-            <span className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-widest">4-Port Controller</span>
+            <span className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-widest shrink-0 leading-none">4-Port Controller</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {ports.map((port) => (
-              <div key={port.id} className="card p-5 flex flex-col gap-4 min-h-[280px]">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${port.power ? 'bg-maroon text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'}`}>
+              <div key={port.id} className="card p-5 flex flex-col gap-4 min-h-[280px] group/port">
+                <div className="flex items-center justify-between py-1">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 ${port.power ? 'bg-maroon text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'}`}>
                       {port.id}
                     </div>
-                    <span className="font-bold text-slate-700 dark:text-slate-200">Port {port.id}</span>
+                    {editingPortId === port.id ? (
+                      <input
+                        type="text"
+                        autoFocus
+                        className="font-bold text-slate-700 dark:text-slate-200 bg-transparent border-b border-maroon outline-none min-w-0 max-w-[8rem] p-0"
+                        value={editingPortName}
+                        onChange={e => setEditingPortName(e.target.value)}
+                        onBlur={() => savePortName(port.id, editingPortName)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' || e.key === 'Escape') savePortName(port.id, editingPortName);
+                        }}
+                      />
+                    ) : (
+                      <>
+                        <span className="font-bold text-slate-700 dark:text-slate-200">{port.name || `Port ${port.id}`}</span>
+                        <button
+                          onClick={() => { setEditingPortId(port.id); setEditingPortName(port.name || `Port ${port.id}`); }}
+                          className="p-1 rounded-md opacity-0 group-hover/port:opacity-100 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500 transition-all"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                        </button>
+                      </>
+                    )}
                   </div>
                   
                   <button 
@@ -787,14 +827,14 @@ export default function App() {
                   ) : (
                     <div className="flex flex-col gap-1">
                       {usbDevices.filter(d => d.port === port.id).map(d => (
-                        <DeviceTree key={d.busid} device={{
-                          id: d.busid,
-                          name: d.name || d.busid,
-                          type: 'device',
-                          vendorId: d.vendorId,
-                          productId: d.productId,
-                          isBusy: d.occupied,
-                        }} />
+                        <div key={d.busid} className={`flex items-center gap-2 py-1.5 px-2 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors`}>
+                          <Usb className={`w-6 h-6 shrink-0 ${d.occupied ? 'text-maroon' : 'text-slate-400'}`} />
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-xs text-slate-700 dark:text-slate-200 truncate">{d.product || d.name || d.busid}</span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400 truncate">{d.manufacturer || '—'}</span>
+                            <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 truncate">{d.busid}{d.vendorId ? ` [${d.vendorId}:${d.productId}]` : ''}</span>
+                          </div>
+                        </div>
                       ))}
                     </div>
                   )}
@@ -805,11 +845,11 @@ export default function App() {
         </section>
 
         {/* Sidebar Blocks */}
-        <aside className="lg:col-span-4 flex flex-col gap-6">
+        <aside className="lg:col-span-4 flex flex-col gap-4">
           
           {/* Block 2: Network Settings */}
-          <section className="flex flex-col gap-6">
-            <h2 className="text-lg font-bold flex items-center gap-2">
+          <section className="flex flex-col gap-3">
+            <h2 className="text-lg font-bold flex items-center gap-2 leading-none px-2">
               <Globe className="w-5 h-5 text-maroon" />
               Network
             </h2>
@@ -1100,8 +1140,8 @@ export default function App() {
           </section>
 
           {/* Block 3: VPN Settings */}
-          <section className="flex flex-col gap-6">
-            <h2 className="text-lg font-bold flex items-center gap-2">
+          <section className="flex flex-col gap-3">
+            <h2 className="text-lg font-bold flex items-center gap-2 leading-none px-2">
               <ShieldCheck className="w-5 h-5 text-maroon" />
               VPN Services
             </h2>
@@ -1316,8 +1356,8 @@ export default function App() {
           </section>
 
           {/* Block 4: System */}
-          <section className="flex flex-col gap-6">
-            <h2 className="text-lg font-bold flex items-center gap-2">
+          <section className="flex flex-col gap-3">
+            <h2 className="text-lg font-bold flex items-center gap-2 leading-none px-2">
               <Settings2 className="w-5 h-5 text-maroon" />
               System
             </h2>
@@ -1522,15 +1562,6 @@ export default function App() {
                       {savedHostname || '—'}
                     </span>
                   </div>
-                  {passwordRequired && (
-                    <button
-                      onClick={handleLogout}
-                      className="ml-auto p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-                      title="Logout"
-                    >
-                      <LogOut className="w-4 h-4" />
-                    </button>
-                  )}
                 </div>
 
                 <AnimatePresence>
@@ -1606,7 +1637,7 @@ export default function App() {
         </aside>
       </main>
 
-      <footer className="mt-auto pt-8 pb-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
+      <footer className="mt-auto pt-4 pb-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
         <div className="flex items-center gap-2 text-slate-400 dark:text-slate-500">
           <Cpu className="w-4 h-4" />
           <span className="text-xs font-medium">Firmware: {appVersion}</span>

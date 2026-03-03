@@ -4,6 +4,8 @@ export interface UsbipDevice {
   busid: string;
   vendorId: string;
   productId: string;
+  manufacturer?: string;
+  product?: string;
   name: string;
   port: number;
   occupied?: boolean;
@@ -22,6 +24,7 @@ export interface USBDevice {
 export interface HubPort {
   id: number;
   power: boolean;
+  name?: string;
   devices: USBDevice[];
 }
 
