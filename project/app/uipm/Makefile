@@ -40,11 +40,14 @@ build-backend:
 		*.go
 
 build-uipm: build-frontend build-backend
+	@rm -rf $(CURRENT_DIR)/$(PKG_BIN_INSTALL)/dist
 	@cp -r $(CURRENT_DIR)/dist $(CURRENT_DIR)/$(PKG_BIN_INSTALL)/
 	$(call MAROC_COPY_PKG_TO_APP_OUTPUT, $(RK_APP_OUTPUT), $(PKG_BIN_INSTALL_DIR))
 
 clean:
 	@rm -rf $(CURRENT_DIR)/$(PKG_BIN_INSTALL_DIR)
+
+.PHONY: all build-uipm build-frontend build-backend clean info
 
 info:
 ifeq ($(RK_ENABLE_UIPM),y)

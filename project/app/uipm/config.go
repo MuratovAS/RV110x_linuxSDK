@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 // FirewallRule defines which interfaces are allowed for a given service.
@@ -460,7 +459,7 @@ func applyTailscale(old, ts TailscaleCfg) {
 			upArgs = append(upArgs, "--login-server="+ts.ServerURL)
 		}
 		upArgs = append(upArgs, "--advertise-exit-node="+strconv.FormatBool(ts.ExitNode))
-		upArgs = append(upArgs, "--timeout=5s")
+		upArgs = append(upArgs, "--timeout=30s")
 		runCmd("tailscale", upArgs...) //nolint:errcheck
 	}
 	if !ts.Enabled && old.Enabled {
@@ -568,6 +567,7 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 		wgChanged := oldWg != newCfg.WireGuard
 		hostnameChanged := oldSystem.Hostname != newSystem.Hostname
 		passwordCleared := req.System.ClearPassword
+		passwordChanged := req.System.Password != ""
 		firewallChanged := oldFirewall != newCfg.Firewall
 		oldSSHJSON, _ := json.Marshal(oldSSH)
 		newSSHJSON, _ := json.Marshal(newCfg.SSH)
@@ -601,12 +601,10 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 		if hostnameChanged {
 			go applyHostname(newSystem.Hostname)
 		}
-		// When password is cleared, invalidate all active sessions so that the
-		// open-access mode takes effect immediately.
-		if passwordCleared {
-			sessionsMu.Lock()
-			sessions = map[string]time.Time{}
-			sessionsMu.Unlock()
+		// Invalidate all active sessions when the password is set or cleared
+		// so that stale tokens cannot be reused with a different credential.
+		if passwordCleared || passwordChanged {
+			invalidateAllSessions()
 		}
 		w.WriteHeader(http.StatusNoContent)
 

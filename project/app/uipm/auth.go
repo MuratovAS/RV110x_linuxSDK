@@ -3,8 +3,10 @@ package main
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -13,12 +15,125 @@ import (
 const (
 	cookieName      = "uipm_session"
 	sessionDuration = 24 * time.Hour
+
+	maxLoginAttempts     = 5
+	lockoutDuration      = 5 * time.Minute
+	bruteForceCleanupTTL = 15 * time.Minute
 )
 
 var (
 	sessions   = map[string]time.Time{}
 	sessionsMu sync.Mutex
 )
+
+// ipAttempt tracks failed login attempts per client IP.
+type ipAttempt struct {
+	failures    int
+	lockedUntil time.Time
+}
+
+var (
+	loginAttempts   = map[string]*ipAttempt{}
+	loginAttemptsMu sync.Mutex
+)
+
+func init() {
+	// Periodically remove stale brute-force tracking entries.
+	go func() {
+		ticker := time.NewTicker(bruteForceCleanupTTL)
+		defer ticker.Stop()
+		for range ticker.C {
+			now := time.Now()
+			loginAttemptsMu.Lock()
+			for ip, a := range loginAttempts {
+				if now.After(a.lockedUntil.Add(bruteForceCleanupTTL)) {
+					delete(loginAttempts, ip)
+				}
+			}
+			loginAttemptsMu.Unlock()
+		}
+	}()
+
+	// Periodically evict expired sessions from memory.
+	go func() {
+		ticker := time.NewTicker(sessionDuration)
+		defer ticker.Stop()
+		for range ticker.C {
+			now := time.Now()
+			sessionsMu.Lock()
+			for token, exp := range sessions {
+				if now.After(exp) {
+					delete(sessions, token)
+				}
+			}
+			sessionsMu.Unlock()
+		}
+	}()
+}
+
+// getClientIP returns the remote IP without the port.
+func getClientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+// isLoginLocked returns true if the IP is currently in a lockout window.
+// It also resets the state when the lockout has naturally expired.
+func isLoginLocked(ip string) bool {
+	loginAttemptsMu.Lock()
+	defer loginAttemptsMu.Unlock()
+	a := loginAttempts[ip]
+	if a == nil {
+		return false
+	}
+	if !a.lockedUntil.IsZero() && time.Now().Before(a.lockedUntil) {
+		return true
+	}
+	// Lockout expired — clean up so the IP gets a fresh start.
+	if !a.lockedUntil.IsZero() {
+		delete(loginAttempts, ip)
+	}
+	return false
+}
+
+// recordFailedLogin increments the failure counter for the IP and applies a
+// lockout once maxLoginAttempts is reached.
+func recordFailedLogin(ip string) {
+	loginAttemptsMu.Lock()
+	defer loginAttemptsMu.Unlock()
+	a := loginAttempts[ip]
+	if a == nil {
+		a = &ipAttempt{}
+		loginAttempts[ip] = a
+	}
+	// Reset if the previous lockout already expired.
+	if !a.lockedUntil.IsZero() && time.Now().After(a.lockedUntil) {
+		a.failures = 0
+		a.lockedUntil = time.Time{}
+	}
+	a.failures++
+	if a.failures >= maxLoginAttempts {
+		a.lockedUntil = time.Now().Add(lockoutDuration)
+	}
+}
+
+// resetLoginAttempts clears the failure state for the IP on a successful login.
+func resetLoginAttempts(ip string) {
+	loginAttemptsMu.Lock()
+	delete(loginAttempts, ip)
+	loginAttemptsMu.Unlock()
+}
+
+// invalidateAllSessions drops every active session cookie.
+// Called when a password is set or cleared so existing tokens stop working.
+func invalidateAllSessions() {
+	sessionsMu.Lock()
+	sessions = map[string]time.Time{}
+	sessionsMu.Unlock()
+}
 
 func generateToken() string {
 	b := make([]byte, 32)
@@ -105,6 +220,14 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
+	ip := getClientIP(r)
+	if isLoginLocked(ip) {
+		http.Error(w, "too many requests", http.StatusTooManyRequests)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 1024)
 	var req struct {
 		Password string `json:"password"`
 	}
@@ -115,10 +238,16 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	salt := cfg.System.PasswordSalt
 	cfgMu.RUnlock()
 
-	if hash != "" && hashPassword(req.Password, salt) != hash {
-		http.Error(w, "invalid password", http.StatusUnauthorized)
-		return
+	if hash != "" {
+		computed := hashPassword(req.Password, salt)
+		if subtle.ConstantTimeCompare([]byte(computed), []byte(hash)) != 1 {
+			recordFailedLogin(ip)
+			http.Error(w, "invalid password", http.StatusUnauthorized)
+			return
+		}
 	}
+
+	resetLoginAttempts(ip)
 
 	token := generateToken()
 	sessionsMu.Lock()
