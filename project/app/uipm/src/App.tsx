@@ -58,7 +58,7 @@ const DeviceTree: React.FC<{ device: USBDevice; depth?: number }> = ({ device, d
   return (
     <div className="flex flex-col">
       <div 
-        className={`flex items-center gap-2 py-1.5 px-2 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${depth > 0 ? 'ml-4 border-l border-slate-200 dark:border-slate-600' : ''}`}
+        className={`flex items-center gap-2 py-1.5 px-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors ${depth > 0 ? 'ml-4 border-l border-slate-200 dark:border-slate-600' : ''}`}
       >
         {device.type === 'hub' ? (
           <Server className={`w-4 h-4 ${device.isBusy ? 'text-maroon' : 'text-slate-400'}`} />
@@ -827,7 +827,7 @@ export default function App() {
                   ) : (
                     <div className="flex flex-col gap-1">
                       {usbDevices.filter(d => d.port === port.id).map(d => (
-                        <div key={d.busid} className={`flex items-center gap-2 py-1.5 px-2 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors`}>
+                        <div key={d.busid} className={`flex items-center gap-2 py-1.5 px-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors`}>
                           <Usb className={`w-6 h-6 shrink-0 ${d.occupied ? 'text-maroon' : 'text-slate-400'}`} />
                           <div className="flex flex-col min-w-0">
                             <span className="text-xs text-slate-700 dark:text-slate-200 truncate">{d.product || d.name || d.busid}</span>
@@ -946,16 +946,13 @@ export default function App() {
                         </div>
                       )}
 
-                      {isEthChanged && (
-                        <motion.button 
-                          initial={{ opacity: 0, scale: 0.95 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          onClick={handleApplyEth}
-                          className="btn-primary w-full text-xs py-1.5 shadow-md shadow-maroon/10"
-                        >
-                          Apply Changes
-                        </motion.button>
-                      )}
+                      <button
+                        onClick={handleApplyEth}
+                        disabled={!isEthChanged}
+                        className="btn-primary w-full text-xs py-1.5 shadow-md shadow-maroon/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Apply Changes
+                      </button>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -1108,16 +1105,13 @@ export default function App() {
                         </div>
                       )}
 
-                      {isWifiChanged && (
-                        <motion.button
-                          initial={{ opacity: 0, scale: 0.95 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          onClick={handleApplyWifi}
-                          className="btn-primary w-full text-xs py-1.5 shadow-md shadow-maroon/10"
-                        >
-                          Apply Changes
-                        </motion.button>
-                      )}
+                      <button
+                        onClick={handleApplyWifi}
+                        disabled={!isWifiChanged}
+                        className="btn-primary w-full text-xs py-1.5 shadow-md shadow-maroon/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Apply Changes
+                      </button>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -1230,16 +1224,13 @@ export default function App() {
                         </button>
                       </div>
 
-                      {isTsChanged && (
-                        <motion.button 
-                          initial={{ opacity: 0, scale: 0.95 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          onClick={handleApplyTs}
-                          className="btn-primary w-full text-xs py-1.5 shadow-md shadow-maroon/10"
-                        >
-                          Apply Changes
-                        </motion.button>
-                      )}
+                      <button
+                        onClick={handleApplyTs}
+                        disabled={!isTsChanged}
+                        className="btn-primary w-full text-xs py-1.5 shadow-md shadow-maroon/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Apply Changes
+                      </button>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -1324,16 +1315,13 @@ export default function App() {
                         />
                       </div>
                       
-                      {isWgChanged && (
-                        <motion.button 
-                          initial={{ opacity: 0, scale: 0.95 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          onClick={handleApplyWg}
-                          className="btn-primary w-full text-xs py-1.5 shadow-md shadow-maroon/10"
-                        >
-                          Apply Changes
-                        </motion.button>
-                      )}
+                      <button
+                        onClick={handleApplyWg}
+                        disabled={!isWgChanged}
+                        className="btn-primary w-full text-xs py-1.5 shadow-md shadow-maroon/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Apply Changes
+                      </button>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -1431,16 +1419,13 @@ export default function App() {
                           value={newKeyValue}
                           onChange={e => setNewKeyValue(e.target.value)}
                         />
-                        {newKeyValue.trim() && (
-                          <motion.button
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            onClick={addSshKey}
-                            className="btn-primary w-full text-xs py-1.5 shadow-md shadow-maroon/10"
-                          >
-                            Add Key
-                          </motion.button>
-                        )}
+                        <button
+                          onClick={addSshKey}
+                          disabled={!newKeyValue.trim()}
+                          className="btn-primary w-full text-xs py-1.5 shadow-md shadow-maroon/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          Add Key
+                        </button>
                       </div>
                     </motion.div>
                   )}
@@ -1527,16 +1512,13 @@ export default function App() {
                         </div>
                       ))}
 
-                      {isFwChanged && (
-                        <motion.button
-                          initial={{ opacity: 0, scale: 0.95 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          onClick={handleApplyFirewall}
-                          className="btn-primary w-full text-xs py-1.5 shadow-md shadow-maroon/10"
-                        >
-                          Apply Changes
-                        </motion.button>
-                      )}
+                      <button
+                        onClick={handleApplyFirewall}
+                        disabled={!isFwChanged}
+                        className="btn-primary w-full text-xs py-1.5 shadow-md shadow-maroon/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Apply Changes
+                      </button>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -1583,10 +1565,18 @@ export default function App() {
                         />
                       </div>
 
-                      <div className="space-y-1 pt-2 border-t border-slate-100 dark:border-slate-700">
+                      <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-700">
                         <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">
                           {hasPassword ? 'Change Password' : 'Set Password'}
                         </label>
+                        {hasPassword && (
+                          <button
+                            onClick={handleClearPassword}
+                            className="w-full text-xs py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-200 dark:hover:border-red-700 hover:text-red-500 transition-colors"
+                          >
+                            Remove Password
+                          </button>
+                        )}
                         <input
                           type="password"
                           className="input-field"
@@ -1594,39 +1584,26 @@ export default function App() {
                           value={newPassword}
                           onChange={e => setNewPassword(e.target.value)}
                         />
-                        {newPassword && (
-                          <input
-                            type="password"
-                            className="input-field"
-                            placeholder="Confirm password"
-                            value={confirmPassword}
-                            onChange={e => setConfirmPassword(e.target.value)}
-                          />
-                        )}
+                        <input
+                          type="password"
+                          className="input-field disabled:opacity-40 disabled:cursor-not-allowed"
+                          placeholder="Confirm password"
+                          disabled={!newPassword}
+                          value={confirmPassword}
+                          onChange={e => setConfirmPassword(e.target.value)}
+                        />
                         {passwordError && (
                           <p className="text-xs text-red-500 font-medium">{passwordError}</p>
                         )}
                       </div>
 
-                      {(hostname !== savedHostname || newPassword) && (
-                        <motion.button
-                          initial={{ opacity: 0, scale: 0.95 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          onClick={handleApplySystem}
-                          className="btn-primary w-full text-xs py-1.5 shadow-md shadow-maroon/10"
-                        >
-                          Apply Changes
-                        </motion.button>
-                      )}
-
-                      {hasPassword && (
-                        <button
-                          onClick={handleClearPassword}
-                          className="w-full text-xs py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-200 dark:hover:border-red-700 hover:text-red-500 transition-colors"
-                        >
-                          Remove Password
-                        </button>
-                      )}
+                      <button
+                        onClick={handleApplySystem}
+                        disabled={hostname === savedHostname && !newPassword}
+                        className="btn-primary w-full text-xs py-1.5 shadow-md shadow-maroon/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Apply Changes
+                      </button>
                     </motion.div>
                   )}
                 </AnimatePresence>
